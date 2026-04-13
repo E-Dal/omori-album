@@ -1,0 +1,1557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMORI Photo Album</title>
+<style>
+  @font-face {
+    font-family: 'OMORI';
+    src: url('assets/ui/OMORI_GAME2.ttf') format('truetype');
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    overflow: hidden;
+    width: 100vw; height: 100vh;
+    user-select: none;
+    -webkit-user-select: none;
+    font-family: 'OMORI', sans-serif;
+  }
+
+  /* ── Pixel-art rendering ── */
+  img, canvas { image-rendering: pixelated; }
+
+  /* ── Parallax ── */
+  #parallax-bg {
+    position: fixed; inset: 0; z-index: 0;
+    background-size: auto 100%; background-repeat: repeat-x;
+    transition: background-image 0.5s;
+  }
+  #parallax-fg {
+    position: fixed; inset: 0;
+    z-index: 1;
+    background-size: auto 100%; background-repeat: repeat-x;
+    pointer-events: none;
+  }
+
+  /* ── Album select ── */
+  #album-select {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 40px;
+    background: rgba(0,0,0,0.6);
+  }
+  #album-select h1 { color: #fff; font-size: 24px; letter-spacing: 4px; }
+  .album-covers { display: flex; gap: 50px; }
+  .album-cover-btn {
+    text-align: center;
+    transition: transform 0.2s;
+  }
+  .album-cover-btn.selected { transform: scale(1.08); }
+  .album-cover-btn canvas { height: 240px; width: auto; }
+  .album-cover-label { color: #ccc; margin-top: 10px; font-size: 14px; letter-spacing: 1px; }
+  .album-cover-btn.selected .album-cover-label { color: #fff; }
+  .select-cursor {
+    width: 38px; height: 22px;
+    margin: 8px auto 0;
+    visibility: hidden;
+  }
+  .album-cover-btn.selected .select-cursor { visibility: visible; }
+  .select-hint {
+    color: #888; font-size: 13px; letter-spacing: 1px;
+  }
+
+  /* ── Game viewport (640x480 scaled) ── */
+  #game-viewport {
+    position: fixed; inset: 0; z-index: 10;
+    display: none; align-items: center; justify-content: center;
+  }
+  #scene {
+    position: relative;
+    width: 640px; height: 480px;
+    transform-origin: center center;
+    overflow: visible;
+  }
+
+  /* ── Legend bar (top HUD) ── */
+  #legend-bar {
+    position: absolute; top: 0; left: -600px;
+    width: 1840px; height: 30px;
+    background: #000;
+    border-bottom: 3px solid #fff;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 620px;
+    z-index: 30;
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  #legend-bar::after {
+    content: '';
+    position: absolute;
+    bottom: -4px; left: 0; right: 0;
+    height: 1px;
+    background: #000;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 6px;
+    color: #fff; font-size: 23px; letter-spacing: 1px;
+  }
+  .legend-icon {
+    height: 24px;
+    image-rendering: pixelated;
+    vertical-align: middle;
+  }
+
+  /* ── Album book ── */
+  #album-book {
+    position: absolute;
+    transition: transform 0.4s cubic-bezier(0.33,1,0.68,1),
+                opacity 0.3s;
+  }
+  #book-bg { display: block; }
+  #page-text-overlay {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    opacity: 0.7;
+    pointer-events: none;
+  }
+
+  /* ── Photo thumbnails on book ── */
+  .photo-slot {
+    position: absolute;
+    width: 86px; height: 101px;
+  }
+  .photo-slot img { width: 100%; height: 100%; }
+
+  /* ── Hand cursor ── */
+  #hand-cursor {
+    position: absolute;
+    z-index: 25;
+    pointer-events: none;
+    transition: left 0.12s cubic-bezier(0.33,1,0.68,1),
+                top 0.12s cubic-bezier(0.33,1,0.68,1);
+  }
+
+  /* ── Page turn controls (game-accurate) ── */
+  .page-turn-group {
+    position: absolute;
+    z-index: 20;
+    width: 58px; height: 58px;
+    background: #000;
+    border: 3px solid #fff;
+    outline: 1px solid #000;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 1px;
+    transition: opacity 0.3s;
+  }
+  /* Key icon image (24x24 from game assets) */
+  .page-key-icon {
+    width: 24px; height: 24px;
+    image-rendering: pixelated;
+    position: relative;
+    top: 3px;
+  }
+  /* Hand inside the outer box */
+  .page-turn-hand {
+    image-rendering: pixelated;
+    position: relative;
+    top: -3px;
+    transition: filter 0.2s;
+  }
+
+  /* ── Music toggle button ── */
+  #music-toggle {
+    position: absolute;
+    top: 16px; left: 16px;
+    width: 40px; height: 40px;
+    background: rgba(0,0,0,0.6);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 4px;
+    z-index: 200;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #music-toggle:hover { background: rgba(0,0,0,0.85); border-color: rgba(255,255,255,0.6); }
+  #music-toggle svg { width: 22px; height: 22px; }
+  .music-slash {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 34px; height: 3px;
+    background: #e44;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    border-radius: 1px;
+    transition: opacity 0.2s;
+  }
+  #music-toggle.playing .music-slash { opacity: 0; }
+
+  /* ── Page flip overlay ── */
+  #page-flip {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    z-index: 5;
+    pointer-events: none;
+    display: none;
+    overflow: hidden;
+  }
+  #page-flip canvas {
+    image-rendering: pixelated;
+  }
+
+  /* ── Photo info bar (bottom) ── */
+  #photo-info-bar {
+    position: absolute;
+    bottom: 0; left: 0;
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    padding: 6px 16px;
+    font-size: 14px;
+    letter-spacing: 1px;
+    z-index: 25;
+    white-space: nowrap;
+    display: none;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+
+  /* ── Full photo viewer ── */
+  #viewer {
+    position: absolute; inset: 0;
+    z-index: 35;
+    display: none;
+  }
+  #viewer.active { display: block; }
+
+  #viewer-photo {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    left: 50%;
+    transition: top 0.4s cubic-bezier(0.33,1,0.68,1),
+                opacity 0.35s,
+                left 0.4s cubic-bezier(0.33,1,0.68,1);
+  }
+
+  /* Viewer arrow boxes (left/right) */
+  .viewer-arrow-box {
+    position: absolute;
+    width: 45px; height: 25px;
+    background: #000; border: 3px solid #fff; outline: 1px solid #000;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 40;
+    transition: opacity 0.3s, left 0.3s, right 0.3s;
+  }
+  #viewer-arrow-left { top: 50%; transform: translateY(calc(-50% - 60px)); }
+  #viewer-arrow-right { top: 50%; transform: translateY(calc(-50% - 60px)); width: 44px; }
+
+  /* SHIFT READ prompt */
+  #shift-read-prompt {
+    position: absolute;
+    bottom: 5px; left: 50%;
+    transform: translateX(calc(-50% - 17px));
+    display: flex; align-items: center; gap: 8px;
+    z-index: 40;
+  }
+  #shift-read-prompt .legend-icon { height: 24px; position: relative; top: 6px; left: -3px; }
+  #shift-read-prompt span {
+    color: #fff; font-size: 26px; letter-spacing: 1px;
+    margin-left: -8px;
+    position: relative;
+    top: 3px;
+  }
+  #shift-read-prompt.has-outline span {
+    text-shadow: -1px -1px 0 #666, 1px -1px 0 #666, -1px 1px 0 #666, 1px 1px 0 #666, 0 -1px 0 #666, 0 1px 0 #666, -1px 0 0 #666, 1px 0 0 #666;
+  }
+
+  /* ── Message box (for reading descriptions) ── */
+  #message-box {
+    position: absolute;
+    bottom: 9px; left: 18px; right: 17px;
+    background: #000;
+    border: 3px solid #fff;
+    outline: 1px solid #000;
+    color: #fff;
+    padding-top: 7px;
+    padding-right: 12px;
+    padding-bottom: 11px;
+    padding-left: 14px;
+    font-size: 28px;
+    line-height: 29px;
+    z-index: 50;
+    display: none;
+    height: 110px;
+  }
+  #message-box.has-face {
+    padding-left: 126px;
+  }
+  #message-box.active {
+    display: flex; align-items: flex-start;
+    transform-origin: center center;
+    animation: msgOpen 0.13s ease-out forwards;
+  }
+  #message-box.closing {
+    animation: msgClose 0.13s ease-in forwards;
+  }
+  /* Date label above message box (independent positioning) */
+  #message-date {
+    position: absolute;
+    bottom: 125px; left: 18px;
+    background: #000;
+    border: 3px solid #fff;
+    outline: 1px solid #000;
+    color: #fff;
+    padding: 2px 12px;
+    font-size: 29px;
+    white-space: nowrap;
+    display: none;
+    z-index: 51;
+    transform-origin: left center;
+  }
+  #message-date.active {
+    display: block;
+    animation: dateSlideIn 0.18s ease-out forwards;
+  }
+  #message-date.closing {
+    animation: dateSlideOut 0.12s ease-in forwards;
+  }
+  @keyframes dateSlideIn {
+    0% { transform: translateX(-120%) scaleY(0); }
+    100% { transform: translateX(0) scaleY(1); }
+  }
+  @keyframes dateSlideOut {
+    0% { transform: translateX(0) scaleY(1); }
+    100% { transform: translateX(-120%) scaleY(0); }
+  }
+  @keyframes msgOpen {
+    0% { transform: scaleY(0); opacity: 1; }
+    100% { transform: scaleY(1); opacity: 1; }
+  }
+  @keyframes msgClose {
+    0% { transform: scaleY(1); opacity: 1; }
+    100% { transform: scaleY(0); opacity: 1; }
+  }
+  #message-face {
+    position: absolute;
+    left: 10px; top: 50%;
+    transform: translateY(-50%);
+    width: 96px; height: 96px;
+    image-rendering: pixelated;
+    display: none;
+  }
+  #message-box.has-face #message-face { display: block; }
+  #message-content {
+    flex: 1;
+    margin-top: 0;
+  }
+  #message-continue {
+    position: absolute;
+    bottom: 8px; right: 24px;
+    width: 29px; height: 15px;
+    image-rendering: pixelated;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+</style>
+</head>
+<body>
+
+<div id="parallax-bg"></div>
+<div id="parallax-fg"></div>
+
+<!-- Album Select -->
+<div id="album-select">
+  <h1>BASIL'S PHOTO ALBUM</h1>
+  <div class="album-covers">
+    <div class="album-cover-btn selected" data-album="dreamworld">
+      <canvas id="cover-dw" width="241" height="325"></canvas>
+      <div class="album-cover-label">HEADSPACE</div>
+      <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
+    </div>
+    <div class="album-cover-btn" data-album="faraway">
+      <canvas id="cover-fa" width="241" height="325"></canvas>
+      <div class="album-cover-label">FARAWAY TOWN</div>
+      <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
+    </div>
+  </div>
+  <div class="select-hint">A / D to select &middot; SPACE to open</div>
+  <div id="music-toggle" onclick="toggleMusic()">
+    <svg viewBox="0 0 24 24" fill="white">
+      <path d="M3 9v6h4l5 5V4L7 9H3z"/>
+      <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+      <path d="M14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+    </svg>
+    <div class="music-slash"></div>
+  </div>
+</div>
+
+<!-- Game Viewport -->
+<div id="game-viewport">
+  <div id="scene">
+    <!-- Legend HUD bar -->
+    <div id="legend-bar">
+      <div class="legend-item" id="legend-read">
+        READ: <img class="legend-icon" src="assets/ui/kb_shift.png" alt="SHIFT">
+      </div>
+      <div class="legend-item" id="legend-view">
+        VIEW: <img class="legend-icon" src="assets/ui/kb_z.png" alt="Z">
+      </div>
+    </div>
+
+    <!-- Album book -->
+    <div id="album-book">
+      <img id="book-bg" src="" alt="">
+      <img id="page-text-overlay" src="" alt="">
+      <div id="photo-slots"></div>
+      <div id="page-flip"></div>
+      <div id="page-static-cover" style="position:absolute;top:0;z-index:4;display:none;pointer-events:none;overflow:hidden;"></div>
+    </div>
+
+    <!-- Hand cursor -->
+    <img id="hand-cursor" src="assets/ui/cursor_menu.png" alt="" style="display:none;">
+
+    <!-- Page turn controls (game-accurate) -->
+    <div id="page-turn-left" class="page-turn-group">
+      <canvas class="page-key-icon" data-src="assets/ui/kb_arrowleft.png" width="24" height="24" style="position:relative;top:6px;left:-1px"></canvas>
+      <canvas class="arrow-icon page-turn-hand" data-frame="2" width="32" height="29" style="position:relative;top:0px;left:-2px"></canvas>
+    </div>
+    <div id="page-turn-right" class="page-turn-group">
+      <canvas class="page-key-icon" data-src="assets/ui/kb_arrowright.png" width="24" height="24" style="position:relative;top:6px;left:1px"></canvas>
+      <canvas class="arrow-icon page-turn-hand" data-frame="1" width="32" height="29" style="position:relative;top:0px;left:2px"></canvas>
+    </div>
+
+    <!-- Photo info bar -->
+    <div id="photo-info-bar"></div>
+
+    <!-- Full photo viewer -->
+    <div id="viewer">
+      <img id="viewer-photo" src="" alt="">
+      <div id="viewer-arrow-left" class="viewer-arrow-box">
+        <canvas class="arrow-icon" data-frame="2" width="32" height="29"></canvas>
+      </div>
+      <div id="viewer-arrow-right" class="viewer-arrow-box">
+        <canvas class="arrow-icon" data-frame="1" width="32" height="29"></canvas>
+      </div>
+      <div id="shift-read-prompt">
+        <img class="legend-icon" src="assets/ui/kb_shift.png" alt="SHIFT">
+        <span>READ</span>
+      </div>
+    </div>
+
+    <!-- Message box -->
+    <div id="message-date"></div>
+    <div id="message-box">
+      <img id="message-face" src="" alt="">
+      <div id="message-content">
+        <div id="message-text"></div>
+      </div>
+      <img id="message-continue" src="assets/ui/cursor_menu.png" alt="">
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  Arrow icon rendering (ACSArrows is 128x29, 4 frames of 32x29)
+//  Frame 0: pointing hand (left), Frame 1: right arrow, Frame 2: left arrow, Frame 3: hand (right?)
+// ═══════════════════════════════════════════════════
+
+// We'll use canvas crops for the arrow icons
+function createArrowCanvas(frameIndex, flipX) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 32; canvas.height = 29;
+  canvas.style.imageRendering = 'pixelated';
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const img = new Image();
+  img.onload = () => {
+    if (flipX) {
+      ctx.translate(32, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(img, frameIndex * 32, 0, 32, 29, 0, 0, 32, 29);
+  };
+  img.src = 'assets/ui/ACSArrows.png';
+  return canvas;
+}
+
+// ═══════════════════════════════════════════════════
+//  Data
+// ═══════════════════════════════════════════════════
+const ALBUMS = {
+  dreamworld: {
+    name: 'HEADSPACE',
+    bookImage: 'assets/ui/dream_world_album.png',
+    parallax: 'assets/ui/Dreamworld_polaroidBG_FA_day.png',
+    parallaxFg: 'assets/ui/Dreamworld_polaroidBG_FA.png',
+    face: 'assets/ui/basil_face_dw.png',
+    readOutline: true,
+    pageTextPrefix: 'assets/pages/dream_pg',
+    maxPages: 2, totalPhotos: 12,
+    thumbPrefix: 'assets/thumbnails/DW_POLAROID_',
+    fullPrefix: 'assets/fullsize/DW_A_',
+    pages: [[1,2,3,4,5,6],[7,8,9,10,11,0]],
+    texts: null, // loaded from album_segments.json
+  },
+  faraway: {
+    name: 'FARAWAY TOWN',
+    bookImage: 'assets/ui/faraway_town_album.png',
+    parallax: 'assets/ui/Faraway_polaroidBG_FA_day.png',
+    parallaxFg: 'assets/ui/Faraway_polaroidBG_FA.png',
+    face: 'assets/ui/basil_face_fa.png',
+    readOutline: false,
+    pageTextPrefix: 'assets/pages/faraway_pg',
+    maxPages: 8, totalPhotos: 48,
+    thumbPrefix: 'assets/thumbnails/FA_POLAROID_',
+    fullPrefix: 'assets/fullsize/FA_A_',
+    pages: [
+      [1,2,3,4,5,6],[7,8,9,10,11,12],[13,14,15,16,17,18],[19,20,21,22,23,24],
+      [25,26,27,28,29,30],[31,32,33,34,35,36],[37,38,39,40,41,42],[43,44,45,46,47,48],
+    ],
+    texts: null, // loaded from album_segments.json
+  },
+};
+
+// Load segmented text data
+fetch('assets/album_segments.json?v=' + Date.now()).then(r => r.json()).then(data => {
+  ALBUMS.dreamworld.texts = data.dreamworld;
+  ALBUMS.faraway.texts = data.faraway;
+});
+
+// Photo slot positions on the open book (from game code)
+// Left page: slots 0,1,2  Right page: slots 3,4,5
+const SLOT_POS = [
+  {x: 18, y: 19}, {x: 119, y: 108}, {x: 18, y: 202},
+  {x: 245, y: 19}, {x: 346, y: 108}, {x: 245, y: 202},
+];
+
+// Cursor navigation map (from game code updateCursorInput)
+// index -> { up, down, left, right }
+// left page: 0(top) 1(mid) 2(bot), right page: 3(top) 4(mid) 5(bot)
+const NAV_BASE = {
+  0: { down: 1, right: 3 },
+  1: { up: 0, down: 2, right: 4 },
+  2: { up: 1, right: 5 },
+  3: { down: 4, left: 0 },
+  4: { up: 3, down: 5, left: 1 },
+  5: { up: 4, left: 2 },
+};
+
+// Check if a photo index has readable text
+function photoHasText(globalIdx) {
+  if (!album || !album.texts) return false;
+  const boxes = album.texts[globalIdx];
+  return boxes && boxes.length > 0 && boxes[0][0] !== '...';
+}
+
+// Check if a slot has a photo on the current page
+function slotHasPhoto(slotIdx) {
+  if (!album) return false;
+  const photos = album.pages[page] || [];
+  return slotIdx < photos.length && photos[slotIdx] > 0;
+}
+
+// Get valid nav target (only move to slots that have photos)
+function getNavTarget(dir) {
+  const target = NAV_BASE[cursorIdx]?.[dir];
+  if (target !== undefined && slotHasPhoto(target)) return target;
+  return undefined;
+}
+
+// ═══════════════════════════════════════════════════
+//  State
+// ═══════════════════════════════════════════════════
+let state = 'select'; // select | browsing | viewing | message
+let album = null;
+let page = 0;
+let cursorIdx = 0;
+let selectIdx = 0;
+let viewingIdx = 0;
+let messageReturnTo = 'browsing';
+let msgBoxes = [];       // current message boxes array (each box = array of lines)
+let msgBoxIdx = 0;       // current box index
+let msgLineIdx = 0;      // current line index within current box
+let msgTyping = false;   // typewriter in progress
+let msgTypingTimer = null;
+let msgPrevLines = '';   // accumulated previous lines in current box
+let parallaxX = 0;
+let parallaxFgX = 0;
+let parallaxFrameCount = 0;
+let lastParallaxSnap = 0;
+let animating = false;
+
+// Cursor bob animation
+let cursorBobAngle = 0;
+
+// ═══════════════════════════════════════════════════
+//  Audio
+// ═══════════════════════════════════════════════════
+const bgm = new Audio('assets/audio/event_maris_theme.ogg');
+bgm.loop = true;
+bgm.volume = 0.6;
+const sfxPageTurn = new Audio('assets/audio/SE_turn_page.ogg');
+sfxPageTurn.volume = 0.7;
+// Web Audio API for low-latency text blips
+let audioCtx = null;
+let textBlipBuffer = null;
+
+// Load the blip sound into a buffer
+fetch('assets/audio/SE_TEXT.ogg')
+  .then(r => r.arrayBuffer())
+  .then(buf => {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx.decodeAudioData(buf);
+  })
+  .then(decoded => { textBlipBuffer = decoded; })
+  .catch(() => {});
+
+function playTextBlip() {
+  if (!musicEnabled || !audioCtx || !textBlipBuffer) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const source = audioCtx.createBufferSource();
+  source.buffer = textBlipBuffer;
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.3;
+  source.connect(gain);
+  gain.connect(audioCtx.destination);
+  source.start(0);
+}
+
+// ═══════════════════════════════════════════════════
+//  DOM refs
+// ═══════════════════════════════════════════════════
+const $select = document.getElementById('album-select');
+const $viewport = document.getElementById('game-viewport');
+const $scene = document.getElementById('scene');
+const $legend = document.getElementById('legend-bar');
+const $legendRead = document.getElementById('legend-read');
+const $book = document.getElementById('album-book');
+const $bookBg = document.getElementById('book-bg');
+const $pageOverlay = document.getElementById('page-text-overlay');
+const $slots = document.getElementById('photo-slots');
+const $cursor = document.getElementById('hand-cursor');
+const $pageTurnL = document.getElementById('page-turn-left');
+const $pageTurnR = document.getElementById('page-turn-right');
+const $photoInfo = document.getElementById('photo-info-bar');
+const $viewer = document.getElementById('viewer');
+const $viewerPhoto = document.getElementById('viewer-photo');
+const $viewerArrowL = document.getElementById('viewer-arrow-left');
+const $viewerArrowR = document.getElementById('viewer-arrow-right');
+const $shiftRead = document.getElementById('shift-read-prompt');
+const $msgBox = document.getElementById('message-box');
+const $msgText = document.getElementById('message-text');
+const $parallax = document.getElementById('parallax-bg');
+
+// ═══════════════════════════════════════════════════
+//  Init
+// ═══════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  drawCovers();
+  drawArrowIcons();
+  drawKeyIcons();
+  // Preload all background images
+  ['assets/ui/Faraway_polaroidBG_FA_day.png',
+   'assets/ui/Dreamworld_polaroidBG_FA_day.png',
+   'assets/ui/Faraway_polaroidBG_FA.png',
+   'assets/ui/Dreamworld_polaroidBG_FA.png'
+  ].forEach(src => { const img = new Image(); img.src = src; });
+  startLoop();
+  $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.png')`;
+});
+
+let arrowImgRed = null;
+let arrowImgWhite = null;
+
+function drawArrowIcons() {
+  arrowImgRed = new Image();
+  arrowImgWhite = new Image();
+  let loaded = 0;
+  function onLoad() {
+    loaded++;
+    if (loaded < 2) return;
+    // Initial draw: all use red (default active state)
+    document.querySelectorAll('.arrow-icon').forEach(canvas => {
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      const frame = parseInt(canvas.dataset.frame) || 0;
+      ctx.drawImage(arrowImgRed, frame * 32, 0, 32, 29, 0, 0, 32, 29);
+    });
+  }
+  arrowImgRed.onload = onLoad;
+  arrowImgWhite.onload = onLoad;
+  arrowImgRed.src = 'assets/ui/ACSArrows.png';
+  arrowImgWhite.src = 'assets/ui/ACSArrows_white.png';
+}
+
+// Redraw a page-turn hand as red (active) or white (disabled)
+function updatePageTurnHands() {
+  if (!arrowImgRed || !arrowImgWhite) return;
+  const leftDisabled = page === 0;
+  const rightDisabled = page >= album.maxPages - 1;
+
+  [[$pageTurnL, leftDisabled], [$pageTurnR, rightDisabled]].forEach(([group, disabled]) => {
+    const canvas = group.querySelector('.page-turn-hand');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, 32, 29);
+    ctx.imageSmoothingEnabled = false;
+    const frame = parseInt(canvas.dataset.frame) || 0;
+    const src = disabled ? arrowImgWhite : arrowImgRed;
+    ctx.drawImage(src, frame * 32, 0, 32, 29, 0, 0, 32, 29);
+  });
+}
+
+let musicEnabled = false;
+
+function toggleMusic() {
+  const btn = document.getElementById('music-toggle');
+  if (bgm.paused) {
+    bgm.play().catch(() => {});
+    btn.classList.add('playing');
+    musicEnabled = true;
+  } else {
+    bgm.pause();
+    btn.classList.remove('playing');
+    musicEnabled = false;
+  }
+}
+
+function playSfx() {
+  if (!musicEnabled) return;
+  sfxPageTurn.currentTime = 0;
+  sfxPageTurn.play().catch(() => {});
+}
+
+function drawKeyIcons() {
+  document.querySelectorAll('.page-key-icon').forEach(canvas => {
+    const img = new Image();
+    img.onload = () => {
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      // strip2 = 2 frames of 24x24, use first frame (up state)
+      ctx.drawImage(img, 0, 0, 24, 24, 0, 0, 24, 24);
+    };
+    img.src = canvas.dataset.src;
+  });
+}
+
+function drawCovers() {
+  const img = new Image();
+  img.onload = () => {
+    const cw = 241, ch = 325;
+    // Frame 0=green(Faraway), Frame 2=purple(Headspace)
+    const frames = {'cover-dw': 1, 'cover-fa': 0};
+    ['cover-dw', 'cover-fa'].forEach((id) => {
+      const c = document.getElementById(id);
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, frames[id] * cw, 0, cw, ch, 0, 0, cw, ch);
+    });
+  };
+  img.src = 'assets/ui/PhotoAlbumCovers.png';
+}
+
+// ═══════════════════════════════════════════════════
+//  Main Loop (parallax + cursor animation)
+// ═══════════════════════════════════════════════════
+function startLoop() {
+  const $fg = document.getElementById('parallax-fg');
+  function tick() {
+    parallaxFrameCount++;
+    // Parallax scroll - game uses 0.1px per frame, applied every frame
+    // This creates a slightly stepped/jerky movement
+    parallaxX -= 0.25;
+    // Jump 1.5px at a time
+    const snapped = Math.round(parallaxX / 1.5) * 1.5;
+    if (snapped !== lastParallaxSnap) {
+      lastParallaxSnap = snapped;
+      $parallax.style.backgroundPosition = `${snapped}px 0`;
+    }
+
+    // Cursor bob (sine wave on anchor, like game)
+    cursorBobAngle = (cursorBobAngle + 0.7) % 20;
+    if (state === 'browsing' && !animating) {
+      const bobX = Math.sin(cursorBobAngle * (Math.PI / 10)) * 2;
+      $cursor.style.marginLeft = (bobX + 8) + 'px';
+    }
+
+    // Message hand bob (slightly slower)
+    if (state === 'message') {
+      const msgHand = document.getElementById('message-continue');
+      if (msgHand && msgHand.style.opacity !== '0') {
+        const msgBob = Math.sin(cursorBobAngle * (Math.PI / 10)) * 2;
+        msgHand.style.marginRight = msgBob + 'px';
+      }
+    }
+
+    requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+// ═══════════════════════════════════════════════════
+//  Viewport scaling
+// ═══════════════════════════════════════════════════
+function updateScale() {
+  const scale = Math.min(
+    window.innerWidth / 640,
+    window.innerHeight / 480
+  );
+  $scene.style.transform = `scale(${scale})`;
+}
+window.addEventListener('resize', updateScale);
+
+// ═══════════════════════════════════════════════════
+//  Album Select
+// ═══════════════════════════════════════════════════
+function updateSelectCursor() {
+  const btns = document.querySelectorAll('.album-cover-btn');
+  btns.forEach((b, i) => b.classList.toggle('selected', i === selectIdx));
+}
+
+// ═══════════════════════════════════════════════════
+//  Open Album
+// ═══════════════════════════════════════════════════
+function openAlbum(key) {
+  album = ALBUMS[key];
+  page = 0;
+  cursorIdx = 0;
+
+  $parallax.style.backgroundImage = `url('${album.parallax}')`;
+  const $fg = document.getElementById('parallax-fg');
+  $fg.style.backgroundImage = album.parallaxFg ? `url('${album.parallaxFg}')` : 'none';
+  // BGM continues if already playing
+  $select.style.display = 'none';
+  $viewport.style.display = 'flex';
+  updateScale();
+
+  $bookBg.onload = () => {
+    // Position book centered vertically
+    const bookW = $bookBg.naturalWidth;
+    const bookH = $bookBg.naturalHeight;
+    $book.style.width = bookW + 'px';
+    $book.style.height = bookH + 'px';
+    const bx = (640 - bookW) / 2;
+    const by = (480 - bookH) / 2;
+    $book.style.left = bx + 'px';
+    $book.style.top = by + 'px';
+
+    // Position page turn controls at album corners
+    $pageTurnL.style.left = (bx - 64) + 'px';
+    $pageTurnL.style.top = (by + 1) + 'px';
+    $pageTurnR.style.left = (bx + bookW + 6) + 'px';
+    $pageTurnR.style.top = (by + 1) + 'px';
+
+    renderPage();
+    updateCursor();
+    $cursor.style.display = 'block';
+    state = 'browsing';
+
+    // Cover top gap with black
+    $legend.style.boxShadow = '0 -500px 0 500px #000';
+    // Legend
+    $legend.style.opacity = '1';
+    $legend.style.transform = 'translateY(0)';
+    updateLegend();
+  };
+  $bookBg.src = album.bookImage;
+}
+
+// ═══════════════════════════════════════════════════
+//  Page Rendering
+// ═══════════════════════════════════════════════════
+function renderPage() {
+  $slots.innerHTML = '';
+  $pageOverlay.src = `${album.pageTextPrefix}${page + 1}.png?v=${Date.now()}`;
+
+  const photos = album.pages[page] || [];
+  photos.forEach((num, i) => {
+    if (!num) return;
+    const pos = SLOT_POS[i];
+    const slot = document.createElement('div');
+    slot.className = 'photo-slot';
+    slot.style.left = pos.x + 'px';
+    slot.style.top = pos.y + 'px';
+    const img = document.createElement('img');
+    img.src = `${album.thumbPrefix}${String(num).padStart(2,'0')}.png?v=${Date.now()}`;
+    slot.appendChild(img);
+    $slots.appendChild(slot);
+  });
+
+  // Arrow states
+  $pageTurnL.classList.toggle('disabled', page === 0);
+  $pageTurnR.classList.toggle('disabled', page >= album.maxPages - 1);
+  updatePageTurnHands();
+}
+
+// ═══════════════════════════════════════════════════
+//  Cursor Position
+// ═══════════════════════════════════════════════════
+function updateCursor() {
+  const pos = SLOT_POS[cursorIdx];
+  const bx = parseInt($book.style.left);
+  const by = parseInt($book.style.top);
+  // Game: cursor center at (pos.x - 10, pos.y + 55), cursor is 29x15
+  $cursor.style.left = (bx + pos.x - 10 - 14) + 'px';
+  $cursor.style.top = (by + pos.y + 55 - 7) + 'px';
+
+  // Update legend READ visibility based on whether current photo has text
+  updateLegend();
+}
+
+function updateLegend() {
+  if (state === 'browsing') {
+    const globalIdx = page * 6 + cursorIdx;
+    const hasText = photoHasText(globalIdx);
+    $legendRead.style.visibility = hasText ? 'visible' : 'hidden';
+
+    // Update photo info bar with date/title (first line of first segment)
+    // Photo info bar disabled
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  Page Turning (with animation)
+// ═══════════════════════════════════════════════════
+// Capture a half-page (left or right) to a canvas, including book bg, text overlay, and photos
+function captureHalfPage(side) {
+  const bookW = $bookBg.naturalWidth;
+  const bookH = $bookBg.naturalHeight;
+  const halfW = Math.floor(bookW / 2);
+  const sx = side === 0 ? 0 : halfW;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = halfW;
+  canvas.height = bookH;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  // Draw book background (cropped half)
+  ctx.drawImage($bookBg, sx, 0, halfW, bookH, 0, 0, halfW, bookH);
+
+  // Draw page text overlay (cropped half)
+  if ($pageOverlay.naturalWidth) {
+    ctx.globalAlpha = 0.7;
+    ctx.drawImage($pageOverlay, sx, 0, halfW, bookH, 0, 0, halfW, bookH);
+    ctx.globalAlpha = 1.0;
+  }
+
+  // Draw photo thumbnails from DOM
+  const slotImgs = $slots.querySelectorAll('.photo-slot img');
+  const photos = album.pages[page] || [];
+  const startSlot = side === 0 ? 0 : 3;
+  const endSlot = side === 0 ? 3 : 6;
+  let imgIdx = 0;
+  for (let i = 0; i < 6; i++) {
+    const num = photos[i];
+    if (!num) continue;
+    if (i >= startSlot && i < endSlot && imgIdx < slotImgs.length) {
+      const imgEl = slotImgs[imgIdx];
+      if (imgEl && imgEl.complete) {
+        const pos = SLOT_POS[i];
+        ctx.drawImage(imgEl, pos.x - sx, pos.y, 86, 101);
+      }
+    }
+    imgIdx++;
+  }
+
+  return canvas;
+}
+
+function waitForPageImages() {
+  const imgs = $slots.querySelectorAll('.photo-slot img');
+  const promises = Array.from(imgs).map(img => {
+    if (img.complete) return Promise.resolve();
+    return new Promise(resolve => {
+      img.onload = resolve;
+      img.onerror = resolve;
+    });
+  });
+  return Promise.all(promises);
+}
+
+function turnPage(dir) {
+  const newPage = page + dir;
+  if (newPage < 0 || newPage >= album.maxPages) return;
+  if (animating) return;
+
+  animating = true;
+  playSfx();
+
+  const $flip = document.getElementById('page-flip');
+  const bookW = $bookBg.naturalWidth;
+  const halfW = Math.floor(bookW / 2);
+
+  // Capture BOTH halves of old page before switching
+  const oldFlipCanvas = captureHalfPage(dir > 0 ? 1 : 0);
+  const oldStaticCanvas = captureHalfPage(dir > 0 ? 0 : 1);
+
+  // Put covers on FIRST (before switching content) to prevent flash
+  const $cover = document.getElementById('page-static-cover');
+
+  // Cover the non-flipping side with old content
+  $cover.innerHTML = '';
+  $cover.appendChild(oldStaticCanvas);
+  oldStaticCanvas.style.width = halfW + 'px';
+  oldStaticCanvas.style.height = '100%';
+  $cover.style.left = (dir > 0 ? '0px' : halfW + 'px');
+  $cover.style.width = halfW + 'px';
+  $cover.style.height = '100%';
+  $cover.style.display = 'block';
+
+  // Setup flip overlay with old flipping side
+  $flip.innerHTML = '';
+  $flip.appendChild(oldFlipCanvas);
+  oldFlipCanvas.style.width = halfW + 'px';
+  oldFlipCanvas.style.height = '100%';
+  $flip.style.left = (dir > 0 ? halfW + 'px' : '0px');
+  $flip.style.width = halfW + 'px';
+  $flip.style.transformOrigin = (dir > 0 ? 'left center' : 'right center');
+  $flip.style.display = 'block';
+  $flip.style.transform = 'scaleX(1)';
+  $flip.style.background = 'none';
+
+  // NOW switch content underneath (hidden by covers)
+  page = newPage;
+  renderPage();
+
+  // Wait for new images to load, then capture new page for phase 2
+  waitForPageImages().then(() => {
+    requestAnimationFrame(() => {
+    const newSide = dir > 0 ? 0 : 1;
+    const newCanvas = captureHalfPage(newSide);
+
+    let frame = 0;
+    const phase1Frames = 12;
+    const phase2Frames = 10;
+
+    function animateFlip() {
+      frame++;
+      if (frame <= phase1Frames) {
+        const t = frame / phase1Frames;
+        const ease = 1 - Math.pow(1 - t, 2);
+        $flip.style.transform = `scaleX(${1 - ease})`;
+      } else if (frame === phase1Frames + 1) {
+        // Switch to new page canvas
+        $flip.innerHTML = '';
+        $flip.appendChild(newCanvas);
+        newCanvas.style.width = halfW + 'px';
+        newCanvas.style.height = '100%';
+
+        if (dir > 0) {
+          $flip.style.left = '0px';
+          $flip.style.transformOrigin = 'right center';
+        } else {
+          $flip.style.left = halfW + 'px';
+          $flip.style.transformOrigin = 'left center';
+        }
+        $flip.style.transform = 'scaleX(0)';
+      } else if (frame <= phase1Frames + phase2Frames + 1) {
+        const t = (frame - phase1Frames - 1) / phase2Frames;
+        const ease = 1 - Math.pow(1 - t, 2);
+        $flip.style.transform = `scaleX(${ease})`;
+      } else {
+        $flip.style.display = 'none';
+        $flip.innerHTML = '';
+        $cover.style.display = 'none';
+        $cover.innerHTML = '';
+        updateCursor();
+        animating = false;
+        return;
+      }
+      requestAnimationFrame(animateFlip);
+    }
+    requestAnimationFrame(animateFlip);
+  });
+  }); // end preloadPageThumbs.then
+}
+
+// ═══════════════════════════════════════════════════
+//  View Photo (full size)
+// ═══════════════════════════════════════════════════
+function startViewing() {
+  if (!slotHasPhoto(cursorIdx)) return;
+  const globalIdx = page * 6 + cursorIdx;
+
+  viewingIdx = globalIdx;
+  state = 'viewing';
+  animating = true;
+
+  // Setup photo
+  const num = viewingIdx + 1;
+  $viewerPhoto.src = `${album.fullPrefix}${String(num).padStart(2,'0')}.png?v=2`;
+
+  // Show viewer
+  $viewer.classList.add('active');
+
+  // Photo slides up from bottom
+  $viewerPhoto.style.top = '120%';
+  $viewerPhoto.style.opacity = '0';
+  $viewerPhoto.style.left = '50%';
+
+  // Album slides down
+  $book.style.transition = 'transform 0.35s cubic-bezier(0.55,0,1,0.45), opacity 0.3s';
+  $book.style.transform = 'translateY(200px)';
+  $book.style.opacity = '0';
+  $cursor.style.display = 'none';
+
+  // Legend & page controls hide
+  $legend.style.opacity = '0';
+  $legend.style.transform = 'translateY(-40px)';
+  $pageTurnL.style.opacity = '0';
+  $pageTurnR.style.opacity = '0';
+  $photoInfo.style.display = 'none';
+
+  setTimeout(() => {
+    $viewerPhoto.style.top = '50%';
+    $viewerPhoto.style.opacity = '1';
+  }, 50);
+
+  // Update viewer arrows
+  updateViewerArrows();
+
+  // Show SHIFT READ prompt
+  $shiftRead.style.opacity = photoHasText(viewingIdx) ? '1' : '0';
+  $shiftRead.classList.toggle('has-outline', album.readOutline);
+
+  setTimeout(() => { animating = false; }, 450);
+}
+
+function endViewing() {
+  if (animating) return;
+  animating = true;
+  state = 'browsing';
+
+  // Photo slides down
+  $viewerPhoto.style.top = '120%';
+  $viewerPhoto.style.opacity = '0';
+
+  // Hide viewer arrows
+  $viewerArrowL.style.opacity = '0';
+  $viewerArrowR.style.opacity = '0';
+  $shiftRead.style.opacity = '0';
+
+  // Album slides back up
+  $book.style.transition = 'transform 0.35s cubic-bezier(0.33,1,0.68,1), opacity 0.3s';
+  $book.style.transform = 'translateY(0)';
+  $book.style.opacity = '1';
+
+  // Legend & page controls show
+  $legend.style.opacity = '1';
+  $legend.style.transform = 'translateY(0)';
+
+  // Update page/cursor to match viewing index
+  const newPage = Math.floor(viewingIdx / 6);
+  const newCursorIdx = viewingIdx % 6;
+  if (newPage !== page) {
+    page = newPage;
+    renderPage();
+  }
+  cursorIdx = newCursorIdx;
+
+  setTimeout(() => {
+    $viewer.classList.remove('active');
+    $cursor.style.display = 'block';
+    $pageTurnL.style.opacity = '';
+    $pageTurnR.style.opacity = '';
+    updateCursor();
+    animating = false;
+  }, 400);
+}
+
+function updateViewerArrows() {
+  const hasPrev = viewingIdx > 0;
+  // Hide the right arrow on the photo before hidden ones (easter egg!)
+  const lastVisibleIdx = album.pages.flat().filter(n => n > 0).length - 1;
+  const hasNext = viewingIdx < lastVisibleIdx;
+  $viewerArrowL.style.left = hasPrev ? '80px' : '-50px';
+  $viewerArrowL.style.opacity = hasPrev ? '1' : '0';
+  $viewerArrowR.style.left = hasNext ? (640 - 45 - 80) + 'px' : '690px';
+  $viewerArrowR.style.opacity = hasNext ? '1' : '0';
+}
+
+function slideViewingPhoto(dir) {
+  if (animating) return;
+  const newIdx = viewingIdx + dir;
+  if (newIdx < 0 || newIdx >= album.totalPhotos) return;
+
+  playSfx();
+  animating = true;
+
+  // Create a copy of the old photo underneath (stays in place, fades out)
+  const oldImg = document.createElement('img');
+  oldImg.src = $viewerPhoto.src;
+  oldImg.style.cssText = $viewerPhoto.style.cssText;
+  oldImg.style.position = 'absolute';
+  oldImg.style.transform = 'translate(-50%, -50%)';
+  oldImg.style.left = '50%';
+  oldImg.style.top = '50%';
+  oldImg.style.zIndex = '36';
+  oldImg.style.transition = 'opacity 1.5s ease';
+  oldImg.style.imageRendering = 'pixelated';
+  $viewer.appendChild(oldImg);
+
+  // Fade out old photo
+  requestAnimationFrame(() => {
+    oldImg.style.opacity = '0';
+  });
+
+  // New photo slides in on top from the side
+  viewingIdx = newIdx;
+  const num = viewingIdx + 1;
+  const newSrc = `${album.fullPrefix}${String(num).padStart(2,'0')}.png?v=2`;
+
+  // Preload to avoid layout shift
+  const preload = new Image();
+  preload.src = newSrc;
+  preload.onload = () => {
+    $viewerPhoto.src = newSrc;
+    $viewerPhoto.style.transition = 'none';
+    $viewerPhoto.style.left = dir > 0 ? '130%' : '-30%';
+    $viewerPhoto.style.opacity = '1';
+    $viewerPhoto.style.zIndex = '37';
+
+    requestAnimationFrame(() => {
+      $viewerPhoto.style.transition = 'left 0.4s cubic-bezier(0.33,1,0.68,1)';
+      $viewerPhoto.style.left = '50%';
+    });
+  };
+  // Fallback if already cached
+  if (preload.complete) preload.onload();
+
+  updateViewerArrows();
+  const newShiftOpacity = photoHasText(viewingIdx) ? '1' : '0';
+  if ($shiftRead.style.opacity !== newShiftOpacity) {
+    $shiftRead.style.opacity = newShiftOpacity;
+  }
+
+  // Clean up old photo after animation
+  setTimeout(() => {
+    oldImg.remove();
+    animating = false;
+  }, 450);
+}
+
+// ═══════════════════════════════════════════════════
+//  Message (READ description)
+// ═══════════════════════════════════════════════════
+function showMessage(boxes) {
+  messageReturnTo = state;
+  state = 'message';
+  msgBoxes = boxes;
+  msgBoxIdx = 0;
+  msgLineIdx = 0;
+  msgPrevLines = '';
+
+  $msgText.innerHTML = '';
+  document.getElementById('message-continue').style.opacity = '0';
+  $msgBox.classList.remove('closing');
+  $msgBox.classList.add('active');
+
+  // Show date label immediately if first entry has one
+  const $date = document.getElementById('message-date');
+  $date.classList.remove('active');
+  $date.classList.remove('closing');
+  const firstEntry = boxes[0][0];
+  if (firstEntry.dateLabel) {
+    $date.textContent = firstEntry.dateLabel;
+    $date.classList.add('active');
+  }
+
+  // Wait for open animation, then start typing
+  setTimeout(() => typewriteLine(), 130);
+
+  // In browsing mode, slide book up a bit
+  if (messageReturnTo === 'browsing') {
+    $book.style.transition = 'transform 0.3s cubic-bezier(0.33,1,0.68,1)';
+    $book.style.transform = 'translateY(-55px)';
+    $legend.style.opacity = '0';
+    $legend.style.transform = 'translateY(-40px)';
+    $pageTurnL.style.opacity = '0';
+    $pageTurnR.style.opacity = '0';
+    $photoInfo.style.display = 'none';
+  }
+}
+
+function typewriteLine() {
+  const box = msgBoxes[msgBoxIdx];
+  const entry = box[msgLineIdx];
+  const text = entry.text;
+  const isInline = entry.inline;
+  // Show date label if this is the first entry of a box with a dateLabel
+  const $date = document.getElementById('message-date');
+  if (msgLineIdx === 0 && entry.dateLabel) {
+    $date.textContent = entry.dateLabel;
+    $date.classList.remove('closing');
+    $date.classList.add('active');
+  }
+
+  msgTyping = true;
+  document.getElementById('message-continue').style.opacity = '0';
+
+  // Pre-split into chunks
+  const chunks = [];
+  // If inline, add a space before the text (continues on same line)
+  if (isInline && msgPrevLines) {
+    chunks.push(' ');
+  }
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '\n') {
+      chunks.push('<br>');
+    } else {
+      chunks.push(text[i]);
+    }
+  }
+
+  let chunkIdx = 0;
+  let blipCounter = 0;
+  const charsPerFrame = 2;
+  const prefix = msgPrevLines;
+  const fullHtml = chunks.join('');
+
+  cancelAnimationFrame(msgTypingTimer);
+  function typeFrame() {
+    chunkIdx += charsPerFrame;
+    if (chunkIdx > chunks.length) chunkIdx = chunks.length;
+    // Show visible part + invisible remainder (preserves word-wrap positions)
+    const visible = chunks.slice(0, chunkIdx).join('');
+    const hidden = chunks.slice(chunkIdx).join('');
+    $msgText.innerHTML = prefix + visible + '<span style="visibility:hidden">' + hidden + '</span>';
+
+    // Play text blip
+    blipCounter += charsPerFrame;
+    if (blipCounter >= 3) {
+      blipCounter = 0;
+      playTextBlip();
+    }
+
+    if (chunkIdx >= chunks.length) {
+      msgTyping = false;
+      // Save accumulated text
+      // If inline, no <br> at the end (next segment continues on same line or adds its own <br>)
+      const separator = isInline ? ' ' : '<br>';
+      const renderedText = text.replace(/\n/g, '<br>');
+      const inlineSpace = (isInline && prefix) ? ' ' : '';
+      msgPrevLines = prefix + inlineSpace + renderedText;
+      // Only add <br> if next entry exists and is not inline
+      const nextEntry = msgLineIdx + 1 < box.length ? box[msgLineIdx + 1] : null;
+      if (nextEntry && !nextEntry.inline) {
+        msgPrevLines += '<br>';
+      }
+      document.getElementById('message-continue').style.opacity = '1';
+    } else {
+      msgTypingTimer = requestAnimationFrame(typeFrame);
+    }
+  }
+  msgTypingTimer = requestAnimationFrame(typeFrame);
+}
+
+function advanceMessage() {
+  if (msgTyping) {
+    // Skip typewriter, show full text immediately
+    cancelAnimationFrame(msgTypingTimer);
+    const box = msgBoxes[msgBoxIdx];
+    const entry = box[msgLineIdx];
+    const text = entry.text;
+    const isInline = entry.inline;
+    const prefix = isInline && msgPrevLines ? ' ' : '';
+    const fullLine = msgPrevLines + prefix + text.replace(/\n/g, '<br>');
+    $msgText.innerHTML = fullLine;
+    msgPrevLines = fullLine;
+    const nextEntry = msgLineIdx + 1 < box.length ? box[msgLineIdx + 1] : null;
+    if (nextEntry && !nextEntry.inline) {
+      msgPrevLines += '<br>';
+    }
+    msgTyping = false;
+    document.getElementById('message-continue').style.opacity = '1';
+    return;
+  }
+
+  msgLineIdx++;
+  const box = msgBoxes[msgBoxIdx];
+
+  if (msgLineIdx < box.length) {
+    // Next line in same box (append below)
+    typewriteLine();
+  } else {
+    // Move to next box
+    msgBoxIdx++;
+    if (msgBoxIdx < msgBoxes.length) {
+      // Clear text and continue in same box (no close/open animation)
+      $msgText.innerHTML = '';
+      document.getElementById('message-continue').style.opacity = '0';
+      msgLineIdx = 0;
+      msgPrevLines = '';
+      // Date label stays visible
+      typewriteLine();
+    } else {
+      // All done
+      closeMessage();
+    }
+  }
+}
+
+function closeMessage() {
+  cancelAnimationFrame(msgTypingTimer);
+  msgTyping = false;
+
+  // Clear text first, then play close animation
+  $msgText.innerHTML = '';
+  document.getElementById('message-continue').style.opacity = '0';
+  const $date = document.getElementById('message-date');
+  if ($date.classList.contains('active')) {
+    // Freeze dimensions before clearing text so animation doesn't collapse
+    $date.style.minWidth = $date.offsetWidth + 'px';
+    $date.style.minHeight = $date.offsetHeight + 'px';
+    $date.textContent = '';
+    $date.classList.add('closing');
+  }
+  $msgBox.classList.add('closing');
+
+  setTimeout(() => {
+    state = messageReturnTo;
+    $msgBox.classList.remove('active');
+    $msgBox.classList.remove('closing');
+    $msgBox.classList.remove('has-face');
+    const $dateCleanup = document.getElementById('message-date');
+    $dateCleanup.classList.remove('active');
+    $dateCleanup.classList.remove('closing');
+    $dateCleanup.style.minWidth = '';
+    $dateCleanup.style.minHeight = '';
+
+    if (messageReturnTo === 'browsing') {
+      $book.style.transition = 'transform 0.3s cubic-bezier(0.33,1,0.68,1)';
+      $book.style.transform = 'translateY(0)';
+      $legend.style.opacity = '1';
+      $legend.style.transform = 'translateY(0)';
+      updateLegend();
+      setTimeout(() => {
+        $pageTurnL.style.opacity = '';
+        $pageTurnR.style.opacity = '';
+      }, 100);
+    }
+  }, 130);
+}
+
+// ═══════════════════════════════════════════════════
+//  Go back to select
+// ═══════════════════════════════════════════════════
+function goBackToSelect() {
+  if (animating) return;
+  state = 'select';
+  album = null;
+  $viewport.style.display = 'none';
+  $viewer.classList.remove('active');
+  $cursor.style.display = 'none';
+  $photoInfo.style.display = 'none';
+  $select.style.display = 'flex';
+  $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.png')`;
+  document.getElementById('parallax-fg').style.backgroundImage = 'none';
+  $legend.style.boxShadow = '';
+  // Reset book transforms
+  $book.style.transform = '';
+  $book.style.opacity = '1';
+}
+
+// ═══════════════════════════════════════════════════
+//  Keyboard Input
+// ═══════════════════════════════════════════════════
+document.addEventListener('keydown', (e) => {
+  if (animating && state !== 'message' && state !== 'viewing') return;
+  const key = e.key;
+
+  // ── SELECT SCREEN ──
+  if (state === 'select') {
+    if (key === 'a' || key === 'A' || key === 'ArrowLeft') {
+      selectIdx = 0;
+      updateSelectCursor();
+    } else if (key === 'd' || key === 'D' || key === 'ArrowRight') {
+      selectIdx = 1;
+      updateSelectCursor();
+    } else if (key === ' ' || key === 'Enter') {
+      e.preventDefault();
+      openAlbum(selectIdx === 0 ? 'dreamworld' : 'faraway');
+    }
+    return;
+  }
+
+  // ── MESSAGE ──
+  if (state === 'message') {
+    if (key === ' ' || key === 'Enter' || key === 'z' || key === 'Z') {
+      e.preventDefault();
+      advanceMessage();
+    } else if (key === 'Escape' || key === 'x' || key === 'X') {
+      e.preventDefault();
+      closeMessage();
+    }
+    return;
+  }
+
+  // ── VIEWING ──
+  if (state === 'viewing') {
+    if (key === 'Escape' || key === 'x' || key === 'X') {
+      endViewing();
+    } else if (key === 'a' || key === 'A' || key === 'ArrowLeft') {
+      slideViewingPhoto(-1);
+    } else if (key === 'd' || key === 'D' || key === 'ArrowRight') {
+      slideViewingPhoto(1);
+    } else if (key === 'Shift') {
+      if (photoHasText(viewingIdx)) showMessage(album.texts[viewingIdx]);
+    }
+    return;
+  }
+
+  // ── BROWSING ──
+  if (state === 'browsing') {
+    // WASD + Arrow keys: move cursor between photos
+    if (key === 'w' || key === 'W' || key === 'ArrowUp') {
+      const target = getNavTarget('up');
+      if (target !== undefined) { cursorIdx = target; updateCursor(); }
+    } else if (key === 's' || key === 'S' || key === 'ArrowDown') {
+      const target = getNavTarget('down');
+      if (target !== undefined) { cursorIdx = target; updateCursor(); }
+    } else if (key === 'a' || key === 'A' || key === 'ArrowLeft') {
+      // Game logic: right page (3,4,5) → left page (0,1,2)
+      // Left middle (1) → left top (0)
+      // Left top/bottom (0,2) → turn page left, keep position
+      if (cursorIdx >= 3) {
+        const target = cursorIdx - 3;
+        if (slotHasPhoto(target)) { cursorIdx = target; updateCursor(); }
+      } else if (cursorIdx === 1) {
+        cursorIdx = 0; updateCursor();
+      } else if (cursorIdx === 0 || cursorIdx === 2) {
+        turnPage(-1);
+      }
+    } else if (key === 'd' || key === 'D' || key === 'ArrowRight') {
+      // Game logic: left page (0,1,2) → right page (3,4,5)
+      // Right top/bottom (3,5) → right middle (4)
+      // Right middle (4) → turn page right, keep position
+      if (cursorIdx < 3) {
+        const target = cursorIdx + 3;
+        if (slotHasPhoto(target)) { cursorIdx = target; updateCursor(); }
+      } else if (cursorIdx === 3 || cursorIdx === 5) {
+        if (slotHasPhoto(4)) { cursorIdx = 4; updateCursor(); }
+      } else if (cursorIdx === 4) {
+        turnPage(1);
+      }
+    // Q/E: page turning
+    } else if (key === 'q' || key === 'Q') {
+      turnPage(-1);
+    } else if (key === 'e' || key === 'E') {
+      turnPage(1);
+    } else if (key === ' ' || key === 'Enter' || key === 'z' || key === 'Z') {
+      e.preventDefault();
+      startViewing();
+    } else if (key === 'Shift') {
+      const globalIdx = page * 6 + cursorIdx;
+      const globalIdx2 = page * 6 + cursorIdx;
+      if (photoHasText(globalIdx2)) showMessage(album.texts[globalIdx2]);
+    } else if (key === 'Escape' || key === 'x' || key === 'X') {
+      goBackToSelect();
+    }
+    return;
+  }
+});
+</script>
+</body>
+</html>
