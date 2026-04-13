@@ -754,7 +754,7 @@
         },
         {
           "text": "A match made in heaven!",
-          "inline": true
+          "inline": false
         }
       ]
     ],
@@ -1051,9 +1051,7 @@
         {
           "text": "They're still working out some stuff, but they already sound so amazing! I know they're going to be great.",
           "inline": false
-        }
-      ],
-      [
+        },
         {
           "text": "Go, MARI! Go, SUNNY!",
           "inline": false

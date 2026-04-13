@@ -271,10 +271,12 @@
     outline: 1px solid #000;
     color: #fff;
     padding-top: 7px;
-    padding-right: 12px;
+    padding-right: 14px;
     padding-bottom: 11px;
     padding-left: 14px;
     font-size: 28px;
+    word-break: keep-all;
+    overflow-wrap: normal;
     line-height: 29px;
     z-index: 50;
     display: none;
@@ -591,12 +593,12 @@ bgm.loop = true;
 bgm.volume = 0.6;
 const sfxPageTurn = new Audio('assets/audio/SE_turn_page.ogg');
 sfxPageTurn.volume = 0.7;
-// Web Audio API for low-latency text blips
+// Web Audio API for low-latency text blips (game-accurate)
+// Game config: SYS_text, volume 50, pitch 100 ± 10, interval 2
 let audioCtx = null;
 let textBlipBuffer = null;
 
-// Load the blip sound into a buffer
-fetch('assets/audio/SE_TEXT.ogg')
+fetch('assets/audio/SYS_text.ogg')
   .then(r => r.arrayBuffer())
   .then(buf => {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -610,6 +612,9 @@ function playTextBlip() {
   if (audioCtx.state === 'suspended') audioCtx.resume();
   const source = audioCtx.createBufferSource();
   source.buffer = textBlipBuffer;
+  // Random pitch variance ±10% (game: pitch 100 ± 10)
+  const pitchVar = 0.1;
+  source.playbackRate.value = 1.0 + (Math.random() * 2 - 1) * pitchVar;
   const gain = audioCtx.createGain();
   gain.gain.value = 0.3;
   source.connect(gain);
@@ -853,6 +858,23 @@ function openAlbum(key) {
     $legend.style.opacity = '1';
     $legend.style.transform = 'translateY(0)';
     updateLegend();
+
+    // ── Fade-in: start semi-transparent, then animate to solid ──
+    $book.style.transition = 'none';
+    $pageTurnL.style.transition = 'none';
+    $pageTurnR.style.transition = 'none';
+    $book.style.opacity = '0.9';
+    $pageTurnL.style.opacity = '0.9';
+    $pageTurnR.style.opacity = '0.9';
+
+    requestAnimationFrame(() => {
+      $book.style.transition = 'opacity 0.6s';
+      $pageTurnL.style.transition = 'opacity 0.6s';
+      $pageTurnR.style.transition = 'opacity 0.6s';
+      $book.style.opacity = '1';
+      $pageTurnL.style.opacity = '1';
+      $pageTurnR.style.opacity = '1';
+    });
   };
   $bookBg.src = album.bookImage;
 }
@@ -862,7 +884,7 @@ function openAlbum(key) {
 // ═══════════════════════════════════════════════════
 function renderPage() {
   $slots.innerHTML = '';
-  $pageOverlay.src = `${album.pageTextPrefix}${page + 1}.png?v=${Date.now()}`;
+  $pageOverlay.src = `${album.pageTextPrefix}${page + 1}.png`;
 
   const photos = album.pages[page] || [];
   photos.forEach((num, i) => {
@@ -873,7 +895,7 @@ function renderPage() {
     slot.style.left = pos.x + 'px';
     slot.style.top = pos.y + 'px';
     const img = document.createElement('img');
-    img.src = `${album.thumbPrefix}${String(num).padStart(2,'0')}.png?v=${Date.now()}`;
+    img.src = `${album.thumbPrefix}${String(num).padStart(2,'0')}.png`;
     slot.appendChild(img);
     $slots.appendChild(slot);
   });
@@ -882,6 +904,19 @@ function renderPage() {
   $pageTurnL.classList.toggle('disabled', page === 0);
   $pageTurnR.classList.toggle('disabled', page >= album.maxPages - 1);
   updatePageTurnHands();
+
+  // Preload fullsize photos for current page + thumbnails for adjacent pages
+  (album.pages[page] || []).forEach(num => {
+    if (!num) return;
+    new Image().src = `${album.fullPrefix}${String(num).padStart(2,'0')}.png?v=2`;
+  });
+  [page - 1, page + 1].forEach(p => {
+    if (p < 0 || p >= album.maxPages) return;
+    (album.pages[p] || []).forEach(num => {
+      if (!num) return;
+      new Image().src = `${album.thumbPrefix}${String(num).padStart(2,'0')}.png`;
+    });
+  });
 }
 
 // ═══════════════════════════════════════════════════
@@ -1089,26 +1124,42 @@ function startViewing() {
   $viewerPhoto.style.opacity = '0';
   $viewerPhoto.style.left = '50%';
 
-  // Album slides down
-  $book.style.transition = 'transform 0.35s cubic-bezier(0.55,0,1,0.45), opacity 0.3s';
-  $book.style.transform = 'translateY(200px)';
+  // Album + page turn controls slide down together
+  $book.style.transition = 'transform 0.5s cubic-bezier(0.33,1,0.68,1), opacity 0.6s';
+  $book.style.transform = 'translateY(500px)';
   $book.style.opacity = '0';
   $cursor.style.display = 'none';
 
-  // Legend & page controls hide
-  $legend.style.opacity = '0';
-  $legend.style.transform = 'translateY(-40px)';
+  // Page turn controls slide down with album
+  $pageTurnL.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.6s';
+  $pageTurnR.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.6s';
+  $pageTurnL.style.transform = 'translateY(500px)';
+  $pageTurnR.style.transform = 'translateY(500px)';
   $pageTurnL.style.opacity = '0';
   $pageTurnR.style.opacity = '0';
+
+  // Legend hides
+  $legend.style.opacity = '0';
+  $legend.style.transform = 'translateY(-40px)';
   $photoInfo.style.display = 'none';
+
+  // Start viewer arrows off-screen
+  $viewerArrowL.style.transition = 'none';
+  $viewerArrowR.style.transition = 'none';
+  $viewerArrowL.style.left = '-60px';
+  $viewerArrowR.style.left = '700px';
+  $viewerArrowL.style.opacity = '1';
+  $viewerArrowR.style.opacity = '1';
 
   setTimeout(() => {
     $viewerPhoto.style.top = '50%';
     $viewerPhoto.style.opacity = '1';
-  }, 50);
 
-  // Update viewer arrows
-  updateViewerArrows();
+    // Slide viewer arrows in from sides
+    $viewerArrowL.style.transition = 'left 0.35s cubic-bezier(0.33,1,0.68,1)';
+    $viewerArrowR.style.transition = 'left 0.35s cubic-bezier(0.33,1,0.68,1)';
+    updateViewerArrows();
+  }, 50);
 
   // Show SHIFT READ prompt
   $shiftRead.style.opacity = photoHasText(viewingIdx) ? '1' : '0';
@@ -1126,17 +1177,35 @@ function endViewing() {
   $viewerPhoto.style.top = '120%';
   $viewerPhoto.style.opacity = '0';
 
-  // Hide viewer arrows
-  $viewerArrowL.style.opacity = '0';
-  $viewerArrowR.style.opacity = '0';
+  // Viewer arrows slide out to sides
+  $viewerArrowL.style.transition = 'left 0.3s cubic-bezier(0.55,0,1,0.45)';
+  $viewerArrowR.style.transition = 'left 0.3s cubic-bezier(0.55,0,1,0.45)';
+  $viewerArrowL.style.left = '-60px';
+  $viewerArrowR.style.left = '700px';
   $shiftRead.style.opacity = '0';
 
-  // Album slides back up
-  $book.style.transition = 'transform 0.35s cubic-bezier(0.33,1,0.68,1), opacity 0.3s';
-  $book.style.transform = 'translateY(0)';
-  $book.style.opacity = '1';
+  // Album slides back up — instantly jump opacity to 0.5, then animate to 1
+  $book.style.transition = 'none';
+  $book.style.opacity = '0.6';
+  $pageTurnL.style.transition = 'none';
+  $pageTurnR.style.transition = 'none';
+  $pageTurnL.style.opacity = '0.6';
+  $pageTurnR.style.opacity = '0.6';
 
-  // Legend & page controls show
+  requestAnimationFrame(() => {
+    $book.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.5s';
+    $book.style.transform = 'translateY(0)';
+    $book.style.opacity = '1';
+
+    $pageTurnL.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.5s';
+    $pageTurnR.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.5s';
+    $pageTurnL.style.transform = 'translateY(0)';
+    $pageTurnR.style.transform = 'translateY(0)';
+    $pageTurnL.style.opacity = '1';
+    $pageTurnR.style.opacity = '1';
+  });
+
+  // Legend shows
   $legend.style.opacity = '1';
   $legend.style.transform = 'translateY(0)';
 
@@ -1152,8 +1221,6 @@ function endViewing() {
   setTimeout(() => {
     $viewer.classList.remove('active');
     $cursor.style.display = 'block';
-    $pageTurnL.style.opacity = '';
-    $pageTurnR.style.opacity = '';
     updateCursor();
     animating = false;
   }, 400);
@@ -1320,7 +1387,7 @@ function typewriteLine() {
 
     // Play text blip
     blipCounter += charsPerFrame;
-    if (blipCounter >= 3) {
+    if (blipCounter >= 2) {
       blipCounter = 0;
       playTextBlip();
     }
