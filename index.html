@@ -171,7 +171,7 @@
     z-index: 999;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.4s;
+    transition: opacity 0.25s;
   }
   #scene-transition.active {
     opacity: 1;
@@ -913,7 +913,7 @@ function openAlbum(key) {
       updateLegend();
     };
     $bookBg.src = album.bookImage;
-  }, 450);
+  }, 280);
 }
 
 // ═══════════════════════════════════════════════════
@@ -1571,7 +1571,7 @@ function goBackToSelect() {
       $trans.classList.remove('active');
       animating = false;
     }, 50);
-  }, 400);
+  }, 280);
 }
 
 // ═══════════════════════════════════════════════════
