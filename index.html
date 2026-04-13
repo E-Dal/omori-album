@@ -28,7 +28,7 @@
   #parallax-bg {
     position: fixed; inset: 0; z-index: 0;
     background-size: auto 100%; background-repeat: repeat-x;
-    transition: background-image 0.5s;
+    background-image: url('assets/ui/Faraway_polaroidBG_FA_day.png');
   }
   #parallax-fg {
     position: fixed; inset: 0;
@@ -595,10 +595,6 @@ let msgLineIdx = 0;      // current line index within current box
 let msgTyping = false;   // typewriter in progress
 let msgTypingTimer = null;
 let msgPrevLines = '';   // accumulated previous lines in current box
-let parallaxX = 0;
-let parallaxFgX = 0;
-let parallaxFrameCount = 0;
-let lastParallaxSnap = 0;
 let animating = false;
 
 // Cursor bob animation
@@ -784,13 +780,6 @@ function startLoop() {
     parallaxFrameCount++;
     // Parallax scroll - game uses 0.1px per frame, applied every frame
     // This creates a slightly stepped/jerky movement
-    parallaxX -= 0.25;
-    // Jump 1.5px at a time
-    const snapped = Math.round(parallaxX / 1.5) * 1.5;
-    if (snapped !== lastParallaxSnap) {
-      lastParallaxSnap = snapped;
-      $parallax.style.backgroundPosition = `${snapped}px 0`;
-    }
 
     // Cursor bob (sine wave on anchor, like game)
     cursorBobAngle = (cursorBobAngle + 0.7) % 20;
@@ -857,6 +846,7 @@ function openAlbum(key) {
   setTimeout(() => {
     // Switch backgrounds
     $parallax.style.backgroundImage = `url('${album.parallax}')`;
+    $parallax.style.backgroundPosition = '0 0';
     const $fg = document.getElementById('parallax-fg');
     $fg.style.backgroundImage = album.parallaxFg ? `url('${album.parallaxFg}')` : 'none';
 
@@ -1558,6 +1548,7 @@ function goBackToSelect() {
     $photoInfo.style.display = 'none';
     $select.style.display = 'flex';
     $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.png')`;
+    $parallax.style.backgroundPosition = '0 0';
     document.getElementById('parallax-fg').style.backgroundImage = 'none';
     $legend.style.boxShadow = '';
     // Reset book transforms
@@ -1674,5 +1665,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 </script>
+<script data-goatcounter="https://e-dal.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
 </body>
 </html>
