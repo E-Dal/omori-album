@@ -42,8 +42,32 @@
     position: fixed; inset: 0; z-index: 100;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 40px;
-    background: rgba(0,0,0,0.6);
   }
+  /* Select screen background layers */
+  #select-bg {
+    position: fixed; inset: 0; z-index: 99;
+    background-size: cover; background-position: center;
+    filter: blur(3px) brightness(0.6);
+    transform: scale(1.02);
+    transition: opacity 0.3s;
+  }
+  #select-gif {
+    position: fixed; z-index: 99;
+    bottom: 0; left: 50%;
+    transform: translateX(-50%) scale(1.5);
+    transform-origin: bottom center;
+    opacity: 1;
+    filter: blur(3px) brightness(0.6);
+    transition: opacity 0.3s;
+  }
+  #select-bg-fade {
+    position: fixed; inset: 0; z-index: 99;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  #select-bg-fade.active { opacity: 1; }
   #album-select h1 { color: #fff; font-size: 24px; letter-spacing: 4px; }
   .album-covers { display: flex; gap: 50px; }
   .album-cover-btn {
@@ -380,6 +404,11 @@
 <div id="parallax-bg"></div>
 <div id="parallax-fg"></div>
 
+<!-- Select screen background -->
+<div id="select-bg"></div>
+<img id="select-gif" src="" alt="">
+<div id="select-bg-fade"></div>
+
 <!-- Album Select -->
 <div id="album-select">
   <h1>BASIL'S PHOTO ALBUM</h1>
@@ -507,6 +536,8 @@ const ALBUMS = {
     parallaxFg: 'assets/ui/Dreamworld_polaroidBG_FA.png',
     face: 'assets/ui/basil_face_dw.png',
     readOutline: true,
+    selectBg: 'assets/ui/bg_headspace.png',
+    selectGif: 'assets/ui/group_dw.gif',
     pageTextPrefix: 'assets/pages/dream_pg',
     maxPages: 2, totalPhotos: 12,
     thumbPrefix: 'assets/thumbnails/DW_POLAROID_',
@@ -521,6 +552,8 @@ const ALBUMS = {
     parallaxFg: 'assets/ui/Faraway_polaroidBG_FA.png',
     face: 'assets/ui/basil_face_fa.png',
     readOutline: false,
+    selectBg: 'assets/ui/bg_faraway.png',
+    selectGif: 'assets/ui/group_fa.gif',
     pageTextPrefix: 'assets/pages/faraway_pg',
     maxPages: 8, totalPhotos: 48,
     thumbPrefix: 'assets/thumbnails/FA_POLAROID_',
@@ -669,6 +702,7 @@ window.addEventListener('DOMContentLoaded', () => {
   drawCovers();
   drawArrowIcons();
   drawKeyIcons();
+  updateSelectCursor(); // Set initial select background
   // Preload all background images
   ['assets/ui/Faraway_polaroidBG_FA_day.png',
    'assets/ui/Dreamworld_polaroidBG_FA_day.png',
@@ -776,10 +810,20 @@ function drawCovers() {
 // ═══════════════════════════════════════════════════
 function startLoop() {
   const $fg = document.getElementById('parallax-fg');
+  let parallaxX = 0;
+  let lastParallaxSnap = 0;
+
   function tick() {
-    parallaxFrameCount++;
-    // Parallax scroll - game uses 0.1px per frame, applied every frame
-    // This creates a slightly stepped/jerky movement
+
+    // Parallax scroll (only inside album, not on select screen)
+    if (state !== 'select') {
+      parallaxX -= 0.25;
+      const snapped = Math.round(parallaxX / 1.5) * 1.5;
+      if (snapped !== lastParallaxSnap) {
+        lastParallaxSnap = snapped;
+        $parallax.style.backgroundPosition = `${snapped}px 0`;
+      }
+    }
 
     // Cursor bob (sine wave on anchor, like game)
     cursorBobAngle = (cursorBobAngle + 0.7) % 20;
@@ -825,9 +869,37 @@ window.addEventListener('resize', updateScale);
 // ═══════════════════════════════════════════════════
 //  Album Select
 // ═══════════════════════════════════════════════════
+let currentSelectBg = '';
+
 function updateSelectCursor() {
   const btns = document.querySelectorAll('.album-cover-btn');
   btns.forEach((b, i) => b.classList.toggle('selected', i === selectIdx));
+
+  // Switch select screen background
+  const selectedAlbum = selectIdx === 0 ? ALBUMS.dreamworld : ALBUMS.faraway;
+  const newBg = selectedAlbum.selectBg;
+
+  if (newBg !== currentSelectBg) {
+    const $sbg = document.getElementById('select-bg');
+    const $sgif = document.getElementById('select-gif');
+    const $sfade = document.getElementById('select-bg-fade');
+
+    if (!currentSelectBg) {
+      // First time — no transition
+      $sbg.style.backgroundImage = `url('${newBg}')`;
+      $sgif.src = selectedAlbum.selectGif;
+      currentSelectBg = newBg;
+    } else {
+      // Fade transition on background only
+      $sfade.classList.add('active');
+      setTimeout(() => {
+        $sbg.style.backgroundImage = `url('${newBg}')`;
+        $sgif.src = selectedAlbum.selectGif;
+        currentSelectBg = newBg;
+        setTimeout(() => $sfade.classList.remove('active'), 50);
+      }, 250);
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -852,6 +924,8 @@ function openAlbum(key) {
 
     // Switch screens
     $select.style.display = 'none';
+    document.getElementById('select-bg').style.display = 'none';
+    document.getElementById('select-gif').style.display = 'none';
     $viewport.style.display = 'flex';
     updateScale();
 
@@ -882,12 +956,29 @@ function openAlbum(key) {
       $cursor.style.display = 'block';
       state = 'browsing';
 
-      // Wait for thumbnails + page overlay
+      // Wait for thumbnails + page overlay + parallax bg/fg
       const allImgs = [...$slots.querySelectorAll('img'), $pageOverlay];
-      Promise.all(allImgs.map(img => {
+
+      // Also wait for parallax background and foreground
+      const bgPromise = new Promise(r => {
+        const bgTest = new Image();
+        bgTest.src = album.parallax;
+        bgTest.complete ? r() : bgTest.onload = r;
+        bgTest.onerror = r;
+      });
+      const fgPromise = album.parallaxFg ? new Promise(r => {
+        const fgTest = new Image();
+        fgTest.src = album.parallaxFg;
+        fgTest.complete ? r() : fgTest.onload = r;
+        fgTest.onerror = r;
+      }) : Promise.resolve();
+
+      const imgPromises = allImgs.map(img => {
         if (img.complete) return Promise.resolve();
         return new Promise(r => { img.onload = r; img.onerror = r; });
-      })).then(() => {
+      });
+
+      Promise.all([...imgPromises, bgPromise, fgPromise]).then(() => {
         $book.style.visibility = '';
         $pageTurnL.style.visibility = '';
         $pageTurnR.style.visibility = '';
@@ -903,7 +994,7 @@ function openAlbum(key) {
       updateLegend();
     };
     $bookBg.src = album.bookImage;
-  }, 280);
+  }, 350);
 }
 
 // ═══════════════════════════════════════════════════
@@ -1258,8 +1349,8 @@ function updateViewerArrows() {
   // Hide the right arrow on the photo before hidden ones (easter egg!)
   const lastVisibleIdx = album.pages.flat().filter(n => n > 0).length - 1;
   const hasNext = viewingIdx < lastVisibleIdx;
-  $viewerArrowL.style.transition = 'left 0.3s, opacity 0.3s';
-  $viewerArrowR.style.transition = 'left 0.3s, opacity 0.3s';
+  $viewerArrowL.style.transition = 'left 0.15s, opacity 0.15s';
+  $viewerArrowR.style.transition = 'left 0.15s, opacity 0.15s';
   $viewerArrowL.style.left = hasPrev ? '80px' : '-50px';
   $viewerArrowL.style.opacity = hasPrev ? '1' : '0';
   $viewerArrowR.style.left = hasNext ? (640 - 45 - 80) + 'px' : '690px';
@@ -1283,8 +1374,9 @@ function slideViewingPhoto(dir) {
   oldImg.style.left = '50%';
   oldImg.style.top = '50%';
   oldImg.style.zIndex = '36';
-  oldImg.style.transition = 'opacity 1.5s ease';
   oldImg.style.imageRendering = 'pixelated';
+  // Force override transition after cssText copy
+  oldImg.style.setProperty('transition', 'opacity 0.8s linear', 'important');
   $viewer.appendChild(oldImg);
 
   // Fade out old photo
@@ -1546,6 +1638,10 @@ function goBackToSelect() {
     $cursor.style.display = 'none';
     $photoInfo.style.display = 'none';
     $select.style.display = 'flex';
+    document.getElementById('select-bg').style.display = '';
+    document.getElementById('select-gif').style.display = '';
+    currentSelectBg = ''; // Reset so it re-applies
+    updateSelectCursor();
     $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.png')`;
     $parallax.style.backgroundPosition = '0 0';
     document.getElementById('parallax-fg').style.backgroundImage = 'none';
