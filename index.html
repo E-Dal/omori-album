@@ -849,88 +849,71 @@ function openAlbum(key) {
   page = 0;
   cursorIdx = 0;
 
-  // Fade to black, then switch scene
+  // Fade to black
   const $trans = document.getElementById('scene-transition');
   $trans.classList.add('active');
 
+  // After fully black: switch everything and load
   setTimeout(() => {
-    // Now hidden behind black — switch everything
+    // Switch backgrounds
     $parallax.style.backgroundImage = `url('${album.parallax}')`;
     const $fg = document.getElementById('parallax-fg');
     $fg.style.backgroundImage = album.parallaxFg ? `url('${album.parallaxFg}')` : 'none';
+
+    // Switch screens
     $select.style.display = 'none';
     $viewport.style.display = 'flex';
     updateScale();
-  }, 400); // wait for fade to black
 
-  $bookBg.onload = () => {
-    // Don't show yet - wait for thumbnails too
+    // Hide book until ready
+    $book.style.visibility = 'hidden';
+    $pageTurnL.style.visibility = 'hidden';
+    $pageTurnR.style.visibility = 'hidden';
+    $cursor.style.visibility = 'hidden';
 
-    // Position book centered vertically
-    const bookW = $bookBg.naturalWidth;
-    const bookH = $bookBg.naturalHeight;
-    $book.style.width = bookW + 'px';
-    $book.style.height = bookH + 'px';
-    const bx = (640 - bookW) / 2;
-    const by = (480 - bookH) / 2;
-    $book.style.left = bx + 'px';
-    $book.style.top = by + 'px';
+    // Load book image
+    $bookBg.onload = () => {
+      const bookW = $bookBg.naturalWidth;
+      const bookH = $bookBg.naturalHeight;
+      $book.style.width = bookW + 'px';
+      $book.style.height = bookH + 'px';
+      const bx = (640 - bookW) / 2;
+      const by = (480 - bookH) / 2;
+      $book.style.left = bx + 'px';
+      $book.style.top = by + 'px';
 
-    // Position page turn controls at album corners
-    $pageTurnL.style.left = (bx - 64) + 'px';
-    $pageTurnL.style.top = (by + 1) + 'px';
-    $pageTurnR.style.left = (bx + bookW + 6) + 'px';
-    $pageTurnR.style.top = (by + 1) + 'px';
+      $pageTurnL.style.left = (bx - 64) + 'px';
+      $pageTurnL.style.top = (by + 1) + 'px';
+      $pageTurnR.style.left = (bx + bookW + 6) + 'px';
+      $pageTurnR.style.top = (by + 1) + 'px';
 
-    renderPage();
-    updateCursor();
-    $cursor.style.display = 'block';
-    state = 'browsing';
+      renderPage();
+      updateCursor();
+      $cursor.style.display = 'block';
+      state = 'browsing';
 
-    // Wait for all thumbnails + page overlay to load, then show everything
-    const allImgs = [...$slots.querySelectorAll('img'), $pageOverlay];
-    Promise.all(allImgs.map(img => {
-      if (img.complete) return Promise.resolve();
-      return new Promise(r => { img.onload = r; img.onerror = r; });
-    })).then(() => {
-      $book.style.visibility = '';
-      $pageTurnL.style.visibility = '';
-      $pageTurnR.style.visibility = '';
-      $cursor.style.visibility = '';
-      // Fade back in from black
-      document.getElementById('scene-transition').classList.remove('active');
-    });
+      // Wait for thumbnails + page overlay
+      const allImgs = [...$slots.querySelectorAll('img'), $pageOverlay];
+      Promise.all(allImgs.map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise(r => { img.onload = r; img.onerror = r; });
+      })).then(() => {
+        $book.style.visibility = '';
+        $pageTurnL.style.visibility = '';
+        $pageTurnR.style.visibility = '';
+        $cursor.style.visibility = '';
 
-    // Cover top gap with black
-    $legend.style.boxShadow = '0 -500px 0 500px #000';
-    // Legend
-    $legend.style.opacity = '1';
-    $legend.style.transform = 'translateY(0)';
-    updateLegend();
+        // Fade back in from black
+        $trans.classList.remove('active');
+      });
 
-    // ── Fade-in: start semi-transparent, then animate to solid ──
-    $book.style.transition = 'none';
-    $pageTurnL.style.transition = 'none';
-    $pageTurnR.style.transition = 'none';
-    $book.style.opacity = '0.9';
-    $pageTurnL.style.opacity = '0.9';
-    $pageTurnR.style.opacity = '0.9';
-
-    requestAnimationFrame(() => {
-      $book.style.transition = 'opacity 0.6s';
-      $pageTurnL.style.transition = 'opacity 0.6s';
-      $pageTurnR.style.transition = 'opacity 0.6s';
-      $book.style.opacity = '1';
-      $pageTurnL.style.opacity = '1';
-      $pageTurnR.style.opacity = '1';
-    });
-  };
-  // Hide book until new image loads to prevent flash of old album
-  $book.style.visibility = 'hidden';
-  $pageTurnL.style.visibility = 'hidden';
-  $pageTurnR.style.visibility = 'hidden';
-  $cursor.style.visibility = 'hidden';
-  $bookBg.src = album.bookImage;
+      $legend.style.boxShadow = '0 -500px 0 500px #000';
+      $legend.style.opacity = '1';
+      $legend.style.transform = 'translateY(0)';
+      updateLegend();
+    };
+    $bookBg.src = album.bookImage;
+  }, 450);
 }
 
 // ═══════════════════════════════════════════════════
