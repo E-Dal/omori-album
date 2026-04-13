@@ -58,10 +58,11 @@
     width: 38px; height: 22px;
     margin: 8px auto 0;
     visibility: hidden;
+    transform: rotate(-90deg);
   }
   .album-cover-btn.selected .select-cursor { visibility: visible; }
   .select-hint {
-    color: #888; font-size: 13px; letter-spacing: 1px;
+    color: #fff; font-size: 15px; letter-spacing: 1px; text-align: center; line-height: 1.5;
   }
 
   /* ── Game viewport (640x480 scaled) ── */
@@ -378,7 +379,7 @@
       <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
     </div>
   </div>
-  <div class="select-hint">A / D to select &middot; SPACE to open</div>
+  <div class="select-hint">Arrow keys / WASD to navigate<br>Z / Enter to confirm<br>X / Esc to cancel</div>
   <div id="music-toggle" onclick="toggleMusic()">
     <svg viewBox="0 0 24 24" fill="white">
       <path d="M3 9v6h4l5 5V4L7 9H3z"/>
@@ -782,6 +783,14 @@ function startLoop() {
       $cursor.style.marginLeft = (bobX + 8) + 'px';
     }
 
+    // Select screen cursor bob (vertical, current position = highest point)
+    if (state === 'select') {
+      const bobY = Math.sin(cursorBobAngle * (Math.PI / 10)) * 2;
+      document.querySelectorAll('.select-cursor').forEach(c => {
+        c.style.transform = `rotate(-90deg) translateX(${-bobY}px)`;
+      });
+    }
+
     // Message hand bob (slightly slower)
     if (state === 'message') {
       const msgHand = document.getElementById('message-continue');
@@ -824,13 +833,25 @@ function openAlbum(key) {
   page = 0;
   cursorIdx = 0;
 
-  $parallax.style.backgroundImage = `url('${album.parallax}')`;
-  const $fg = document.getElementById('parallax-fg');
-  $fg.style.backgroundImage = album.parallaxFg ? `url('${album.parallaxFg}')` : 'none';
-  // BGM continues if already playing
-  $select.style.display = 'none';
-  $viewport.style.display = 'flex';
-  updateScale();
+  // Preload parallax background before switching screens
+  const bgImg = new Image();
+  bgImg.src = album.parallax;
+  const fgSrc = album.parallaxFg;
+
+  function onBgReady() {
+    $parallax.style.backgroundImage = `url('${album.parallax}')`;
+    const $fg = document.getElementById('parallax-fg');
+    $fg.style.backgroundImage = fgSrc ? `url('${fgSrc}')` : 'none';
+    $select.style.display = 'none';
+    $viewport.style.display = 'flex';
+    updateScale();
+  }
+
+  if (bgImg.complete) {
+    onBgReady();
+  } else {
+    bgImg.onload = onBgReady;
+  }
 
   $bookBg.onload = () => {
     // Don't show yet - wait for thumbnails too
@@ -1556,7 +1577,7 @@ document.addEventListener('keydown', (e) => {
     } else if (key === 'd' || key === 'D' || key === 'ArrowRight') {
       selectIdx = 1;
       updateSelectCursor();
-    } else if (key === ' ' || key === 'Enter') {
+    } else if (key === ' ' || key === 'Enter' || key === 'z' || key === 'Z') {
       e.preventDefault();
       openAlbum(selectIdx === 0 ? 'dreamworld' : 'faraway');
     }
