@@ -163,6 +163,21 @@
     transition: filter 0.2s;
   }
 
+  /* ── Scene transition overlay ── */
+  #scene-transition {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 999;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s;
+  }
+  #scene-transition.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+
   /* ── Music toggle button ── */
   #music-toggle {
     position: absolute;
@@ -361,6 +376,7 @@
 </head>
 <body>
 
+<div id="scene-transition"></div>
 <div id="parallax-bg"></div>
 <div id="parallax-fg"></div>
 
@@ -833,25 +849,19 @@ function openAlbum(key) {
   page = 0;
   cursorIdx = 0;
 
-  // Preload parallax background before switching screens
-  const bgImg = new Image();
-  bgImg.src = album.parallax;
-  const fgSrc = album.parallaxFg;
+  // Fade to black, then switch scene
+  const $trans = document.getElementById('scene-transition');
+  $trans.classList.add('active');
 
-  function onBgReady() {
+  setTimeout(() => {
+    // Now hidden behind black — switch everything
     $parallax.style.backgroundImage = `url('${album.parallax}')`;
     const $fg = document.getElementById('parallax-fg');
-    $fg.style.backgroundImage = fgSrc ? `url('${fgSrc}')` : 'none';
+    $fg.style.backgroundImage = album.parallaxFg ? `url('${album.parallaxFg}')` : 'none';
     $select.style.display = 'none';
     $viewport.style.display = 'flex';
     updateScale();
-  }
-
-  if (bgImg.complete) {
-    onBgReady();
-  } else {
-    bgImg.onload = onBgReady;
-  }
+  }, 400); // wait for fade to black
 
   $bookBg.onload = () => {
     // Don't show yet - wait for thumbnails too
@@ -887,6 +897,8 @@ function openAlbum(key) {
       $pageTurnL.style.visibility = '';
       $pageTurnR.style.visibility = '';
       $cursor.style.visibility = '';
+      // Fade back in from black
+      document.getElementById('scene-transition').classList.remove('active');
     });
 
     // Cover top gap with black
@@ -1547,19 +1559,36 @@ function closeMessage() {
 // ═══════════════════════════════════════════════════
 function goBackToSelect() {
   if (animating) return;
-  state = 'select';
-  album = null;
-  $viewport.style.display = 'none';
-  $viewer.classList.remove('active');
-  $cursor.style.display = 'none';
-  $photoInfo.style.display = 'none';
-  $select.style.display = 'flex';
-  $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.png')`;
-  document.getElementById('parallax-fg').style.backgroundImage = 'none';
-  $legend.style.boxShadow = '';
-  // Reset book transforms
-  $book.style.transform = '';
-  $book.style.opacity = '1';
+  animating = true;
+
+  // Fade to black
+  const $trans = document.getElementById('scene-transition');
+  $trans.classList.add('active');
+
+  setTimeout(() => {
+    // Hidden behind black — switch everything
+    state = 'select';
+    album = null;
+    $viewport.style.display = 'none';
+    $viewer.classList.remove('active');
+    $cursor.style.display = 'none';
+    $photoInfo.style.display = 'none';
+    $select.style.display = 'flex';
+    $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.png')`;
+    document.getElementById('parallax-fg').style.backgroundImage = 'none';
+    $legend.style.boxShadow = '';
+    // Reset book transforms
+    $book.style.transform = '';
+    $book.style.opacity = '1';
+    $pageTurnL.style.transform = '';
+    $pageTurnR.style.transform = '';
+
+    // Fade back in
+    setTimeout(() => {
+      $trans.classList.remove('active');
+      animating = false;
+    }, 50);
+  }, 400);
 }
 
 // ═══════════════════════════════════════════════════
