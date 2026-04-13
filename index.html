@@ -266,11 +266,10 @@
 
   #viewer-photo {
     position: absolute;
-    transform: translate(-50%, -50%);
-    left: 50%;
-    transition: top 0.5s cubic-bezier(0.33,1,0.68,1),
-                opacity 0.35s,
-                left 0.5s cubic-bezier(0.33,1,0.68,1);
+    left: 50%; top: 50%;
+    transition: transform 0.5s cubic-bezier(0.33,1,0.68,1),
+                opacity 0.35s;
+    will-change: transform, opacity;
   }
 
   /* Viewer arrow boxes (left/right) */
@@ -280,10 +279,12 @@
     background: #000; border: 3px solid #fff; outline: 1px solid #000;
     display: flex; align-items: center; justify-content: center;
     z-index: 40;
-    transition: opacity 0.3s, left 0.3s, right 0.3s;
+    transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+    will-change: transform, opacity;
   }
-  #viewer-arrow-left { top: 50%; transform: translateY(calc(-50% - 60px)); }
-  #viewer-arrow-right { top: 50%; transform: translateY(calc(-50% - 60px)); width: 44px; }
+  .viewer-arrow-box.no-transition { transition: none !important; }
+  #viewer-arrow-left { top: 50%; left: 80px; transform: translateY(calc(-50% - 60px)) translateX(-380px); }
+  #viewer-arrow-right { top: 50%; left: 515px; width: 44px; transform: translateY(calc(-50% - 60px)) translateX(285px); }
 
   /* SHIFT READ prompt */
   #shift-read-prompt {
@@ -1245,9 +1246,8 @@ function startViewing() {
   $viewer.classList.add('active');
 
   // Photo slides up from bottom
-  $viewerPhoto.style.top = '120%';
+  $viewerPhoto.style.transform = 'translate(-50%, 70%)';
   $viewerPhoto.style.opacity = '0';
-  $viewerPhoto.style.left = '50%';
 
   // Album + page turn controls slide down together
   $book.style.transition = 'transform 0.5s cubic-bezier(0.33,1,0.68,1), opacity 0.6s';
@@ -1268,21 +1268,24 @@ function startViewing() {
   $legend.style.transform = 'translateY(-40px)';
   $photoInfo.style.display = 'none';
 
-  // Start viewer arrows off-screen
-  $viewerArrowL.style.transition = 'none';
-  $viewerArrowR.style.transition = 'none';
-  $viewerArrowL.style.left = '-60px';
-  $viewerArrowR.style.left = '700px';
-  $viewerArrowL.style.opacity = '1';
-  $viewerArrowR.style.opacity = '1';
+  // Start viewer arrows off-screen (no transition for initial placement)
+  const hasPrev = viewingIdx > 0;
+  const lastVisibleIdx = album.pages.flat().filter(n => n > 0).length - 1;
+  const hasNext = viewingIdx < lastVisibleIdx;
+  $viewerArrowL.classList.add('no-transition');
+  $viewerArrowR.classList.add('no-transition');
+  $viewerArrowL.style.transform = 'translateY(calc(-50% - 60px)) translateX(-380px)';
+  $viewerArrowR.style.transform = 'translateY(calc(-50% - 60px)) translateX(285px)';
+  $viewerArrowL.style.opacity = hasPrev ? '1' : '0';
+  $viewerArrowR.style.opacity = hasNext ? '1' : '0';
 
   setTimeout(() => {
-    $viewerPhoto.style.top = '50%';
+    $viewerPhoto.style.transform = 'translate(-50%, -50%)';
     $viewerPhoto.style.opacity = '1';
 
-    // Slide viewer arrows in from sides
-    $viewerArrowL.style.transition = 'left 0.35s cubic-bezier(0.33,1,0.68,1)';
-    $viewerArrowR.style.transition = 'left 0.35s cubic-bezier(0.33,1,0.68,1)';
+    // Re-enable transition, then slide in
+    $viewerArrowL.classList.remove('no-transition');
+    $viewerArrowR.classList.remove('no-transition');
     updateViewerArrows();
   }, 50);
 
@@ -1299,14 +1302,12 @@ function endViewing() {
   state = 'browsing';
 
   // Photo slides down
-  $viewerPhoto.style.top = '120%';
+  $viewerPhoto.style.transform = 'translate(-50%, 70%)';
   $viewerPhoto.style.opacity = '0';
 
   // Viewer arrows slide out to sides
-  $viewerArrowL.style.transition = 'left 0.3s cubic-bezier(0.55,0,1,0.45)';
-  $viewerArrowR.style.transition = 'left 0.3s cubic-bezier(0.55,0,1,0.45)';
-  $viewerArrowL.style.left = '-60px';
-  $viewerArrowR.style.left = '700px';
+  $viewerArrowL.style.transform = 'translateY(calc(-50% - 60px)) translateX(-380px)';
+  $viewerArrowR.style.transform = 'translateY(calc(-50% - 60px)) translateX(285px)';
   $shiftRead.style.opacity = '0';
 
   // Album slides back up — instantly jump opacity to 0.5, then animate to 1
@@ -1356,11 +1357,14 @@ function updateViewerArrows() {
   // Hide the right arrow on the photo before hidden ones (easter egg!)
   const lastVisibleIdx = album.pages.flat().filter(n => n > 0).length - 1;
   const hasNext = viewingIdx < lastVisibleIdx;
-  $viewerArrowL.style.transition = 'left 0.15s, opacity 0.15s';
-  $viewerArrowR.style.transition = 'left 0.15s, opacity 0.15s';
-  $viewerArrowL.style.left = hasPrev ? '80px' : '-50px';
+  // translateX(0) = at fixed left position (visible), negative/positive = off-screen
+  $viewerArrowL.style.transform = hasPrev
+    ? 'translateY(calc(-50% - 60px)) translateX(0)'
+    : 'translateY(calc(-50% - 60px)) translateX(-380px)';
   $viewerArrowL.style.opacity = hasPrev ? '1' : '0';
-  $viewerArrowR.style.left = hasNext ? (640 - 45 - 80) + 'px' : '690px';
+  $viewerArrowR.style.transform = hasNext
+    ? 'translateY(calc(-50% - 60px)) translateX(0)'
+    : 'translateY(calc(-50% - 60px)) translateX(285px)';
   $viewerArrowR.style.opacity = hasNext ? '1' : '0';
 }
 
@@ -1398,7 +1402,7 @@ function slideViewingPhoto(dir) {
 
   // Set up slide-in position first, then change src
   $viewerPhoto.style.transition = 'none';
-  $viewerPhoto.style.left = dir > 0 ? '130%' : '-30%';
+  $viewerPhoto.style.transform = dir > 0 ? 'translate(80%, -50%)' : 'translate(-180%, -50%)';
   $viewerPhoto.style.opacity = '1';
   $viewerPhoto.style.zIndex = '37';
   $viewerPhoto.src = newSrc;
@@ -1406,8 +1410,8 @@ function slideViewingPhoto(dir) {
   // Start slide animation on next frame
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      $viewerPhoto.style.transition = 'left 0.4s cubic-bezier(0.33,1,0.68,1)';
-      $viewerPhoto.style.left = '50%';
+      $viewerPhoto.style.transition = 'transform 0.4s cubic-bezier(0.33,1,0.68,1)';
+      $viewerPhoto.style.transform = 'translate(-50%, -50%)';
     });
   });
 
