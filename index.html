@@ -1258,6 +1258,8 @@ function updateViewerArrows() {
   // Hide the right arrow on the photo before hidden ones (easter egg!)
   const lastVisibleIdx = album.pages.flat().filter(n => n > 0).length - 1;
   const hasNext = viewingIdx < lastVisibleIdx;
+  $viewerArrowL.style.transition = 'left 0.3s, opacity 0.3s';
+  $viewerArrowR.style.transition = 'left 0.3s, opacity 0.3s';
   $viewerArrowL.style.left = hasPrev ? '80px' : '-50px';
   $viewerArrowL.style.opacity = hasPrev ? '1' : '0';
   $viewerArrowR.style.left = hasNext ? (640 - 45 - 80) + 'px' : '690px';
@@ -1295,23 +1297,20 @@ function slideViewingPhoto(dir) {
   const num = viewingIdx + 1;
   const newSrc = `${album.fullPrefix}${String(num).padStart(2,'0')}.png?v=2`;
 
-  // Preload to avoid layout shift
-  const preload = new Image();
-  preload.src = newSrc;
-  preload.onload = () => {
-    $viewerPhoto.src = newSrc;
-    $viewerPhoto.style.transition = 'none';
-    $viewerPhoto.style.left = dir > 0 ? '130%' : '-30%';
-    $viewerPhoto.style.opacity = '1';
-    $viewerPhoto.style.zIndex = '37';
+  // Set up slide-in position first, then change src
+  $viewerPhoto.style.transition = 'none';
+  $viewerPhoto.style.left = dir > 0 ? '130%' : '-30%';
+  $viewerPhoto.style.opacity = '1';
+  $viewerPhoto.style.zIndex = '37';
+  $viewerPhoto.src = newSrc;
 
+  // Start slide animation on next frame
+  requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       $viewerPhoto.style.transition = 'left 0.4s cubic-bezier(0.33,1,0.68,1)';
       $viewerPhoto.style.left = '50%';
     });
-  };
-  // Fallback if already cached
-  if (preload.complete) preload.onload();
+  });
 
   updateViewerArrows();
   const newShiftOpacity = photoHasText(viewingIdx) ? '1' : '0';
