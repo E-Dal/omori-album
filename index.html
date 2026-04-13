@@ -226,9 +226,9 @@
     position: absolute;
     transform: translate(-50%, -50%);
     left: 50%;
-    transition: top 0.4s cubic-bezier(0.33,1,0.68,1),
+    transition: top 0.5s cubic-bezier(0.33,1,0.68,1),
                 opacity 0.35s,
-                left 0.4s cubic-bezier(0.33,1,0.68,1);
+                left 0.5s cubic-bezier(0.33,1,0.68,1);
   }
 
   /* Viewer arrow boxes (left/right) */
@@ -831,11 +831,7 @@ function openAlbum(key) {
   updateScale();
 
   $bookBg.onload = () => {
-    // Show book now that new image is loaded
-    $book.style.visibility = '';
-    $pageTurnL.style.visibility = '';
-    $pageTurnR.style.visibility = '';
-    $cursor.style.visibility = '';
+    // Don't show yet - wait for thumbnails too
 
     // Position book centered vertically
     const bookW = $bookBg.naturalWidth;
@@ -857,6 +853,18 @@ function openAlbum(key) {
     updateCursor();
     $cursor.style.display = 'block';
     state = 'browsing';
+
+    // Wait for all thumbnails + page overlay to load, then show everything
+    const allImgs = [...$slots.querySelectorAll('img'), $pageOverlay];
+    Promise.all(allImgs.map(img => {
+      if (img.complete) return Promise.resolve();
+      return new Promise(r => { img.onload = r; img.onerror = r; });
+    })).then(() => {
+      $book.style.visibility = '';
+      $pageTurnL.style.visibility = '';
+      $pageTurnR.style.visibility = '';
+      $cursor.style.visibility = '';
+    });
 
     // Cover top gap with black
     $legend.style.boxShadow = '0 -500px 0 500px #000';
