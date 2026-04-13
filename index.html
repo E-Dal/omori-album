@@ -400,7 +400,7 @@
 </head>
 <body>
 
-<div id="scene-transition"></div>
+<div id="scene-transition" class="active"></div>
 <div id="parallax-bg"></div>
 <div id="parallax-fg"></div>
 
@@ -711,6 +711,13 @@ window.addEventListener('DOMContentLoaded', () => {
   ].forEach(src => { const img = new Image(); img.src = src; });
   startLoop();
   $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.png')`;
+
+  // Fade in from black once page is ready
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      document.getElementById('scene-transition').classList.remove('active');
+    }, 200);
+  });
 });
 
 let arrowImgRed = null;
