@@ -12,7 +12,7 @@
     src: url('assets/ui/OMORI_GAME2.ttf') format('truetype');
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
+  html, body {
     background: #000;
     overflow: hidden;
     width: 100vw; height: 100vh;
@@ -30,6 +30,9 @@
     background-size: auto 100%; background-repeat: repeat-x;
     background-image: url('assets/ui/Faraway_polaroidBG_FA_day.png');
   }
+  /* Hide parallax layers on select screen (select-bg takes over) */
+  body.on-select #parallax-bg,
+  body.on-select #parallax-fg { display: none; }
   #parallax-fg {
     position: fixed; inset: 0;
     z-index: 1;
@@ -37,24 +40,35 @@
     pointer-events: none;
   }
 
+  /* ── Select screen stage (scales as one unit with cover+crop) ── */
+  #select-stage {
+    position: fixed;
+    left: 50%; top: 50%;
+    width: 1280px; height: 720px;
+    transform: translate(-50%, -50%) scale(var(--select-scale, 1));
+    transform-origin: center center;
+    z-index: 99;
+  }
   /* ── Album select ── */
   #album-select {
-    position: fixed; inset: 0; z-index: 100;
+    position: absolute; inset: 0; z-index: 100;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 40px;
   }
-  /* Select screen background layers */
+  /* Select screen background — always fills the whole window */
   #select-bg {
-    position: fixed; inset: 0; z-index: 99;
-    background-size: cover; background-position: center;
+    position: fixed; inset: 0; z-index: 98;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     filter: blur(3px) brightness(0.6);
     transform: scale(1.02);
     transition: opacity 0.3s;
   }
   #select-gif {
     position: fixed; z-index: 99;
-    bottom: 0; left: 50%;
-    transform: translateX(-50%) scale(1.5);
+    bottom: -2px; left: 50%;
+    transform: translateX(-50%) scale(calc(1.5 * var(--select-scale, 1)));
     transform-origin: bottom center;
     opacity: 1;
     filter: blur(3px) brightness(0.6);
@@ -136,6 +150,7 @@
                 opacity 0.3s;
   }
   #book-bg { display: block; }
+  #book-bg.aged { filter: sepia(0.06) brightness(0.96); }
   #page-text-overlay {
     position: absolute; top: 0; left: 0;
     width: 100%; height: 100%;
@@ -204,9 +219,10 @@
 
   /* ── Music toggle button ── */
   #music-toggle {
-    position: absolute;
+    position: fixed;
     top: 16px; left: 16px;
     width: 40px; height: 40px;
+    display: none;
     background: rgba(0,0,0,0.6);
     border: 2px solid rgba(255,255,255,0.3);
     border-radius: 4px;
@@ -226,6 +242,7 @@
     transition: opacity 0.2s;
   }
   #music-toggle.playing .music-slash { opacity: 0; }
+  body.on-select #music-toggle { display: flex; }
 
   /* ── Page flip overlay ── */
   #page-flip {
@@ -267,8 +284,8 @@
   #viewer-photo {
     position: absolute;
     left: 50%; top: 50%;
-    transition: transform 0.5s cubic-bezier(0.33,1,0.68,1),
-                opacity 0.35s;
+    transition: transform 0.45s cubic-bezier(0.33,1,0.68,1),
+                opacity 0.15s;
     will-change: transform, opacity;
   }
 
@@ -279,7 +296,7 @@
     background: #000; border: 3px solid #fff; outline: 1px solid #000;
     display: flex; align-items: center; justify-content: center;
     z-index: 40;
-    transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+    transition: transform 0.25s ease-out, opacity 0.25s ease-out;
     will-change: transform, opacity;
   }
   .viewer-arrow-box.no-transition { transition: none !important; }
@@ -405,35 +422,44 @@
 <div id="parallax-bg"></div>
 <div id="parallax-fg"></div>
 
-<!-- Select screen background -->
+<!-- Select screen background fills the whole window (outside stage) -->
 <div id="select-bg"></div>
+
+<!-- GIF pinned to window bottom, scales with stage -->
 <img id="select-gif" src="" alt="">
+
+<!-- Fade overlay sits above bg + gif but below stage so UI stays clickable -->
 <div id="select-bg-fade"></div>
 
-<!-- Album Select -->
-<div id="album-select">
-  <h1>BASIL'S PHOTO ALBUM</h1>
-  <div class="album-covers">
-    <div class="album-cover-btn selected" data-album="dreamworld">
-      <canvas id="cover-dw" width="241" height="325"></canvas>
-      <div class="album-cover-label">HEADSPACE</div>
-      <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
+<!-- Select screen (scaled as one unit, cover+crop behavior) -->
+<div id="select-stage">
+  <!-- Album Select -->
+  <div id="album-select">
+    <h1>BASIL'S PHOTO ALBUM</h1>
+    <div class="album-covers">
+      <div class="album-cover-btn selected" data-album="dreamworld">
+        <canvas id="cover-dw" width="241" height="325"></canvas>
+        <div class="album-cover-label">HEADSPACE</div>
+        <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
+      </div>
+      <div class="album-cover-btn" data-album="faraway">
+        <canvas id="cover-fa" width="241" height="325"></canvas>
+        <div class="album-cover-label">FARAWAY TOWN</div>
+        <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
+      </div>
     </div>
-    <div class="album-cover-btn" data-album="faraway">
-      <canvas id="cover-fa" width="241" height="325"></canvas>
-      <div class="album-cover-label">FARAWAY TOWN</div>
-      <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
-    </div>
+    <div class="select-hint">Arrow keys / WASD to navigate<br>Z / Enter to confirm<br>X / Esc to cancel</div>
   </div>
-  <div class="select-hint">Arrow keys / WASD to navigate<br>Z / Enter to confirm<br>X / Esc to cancel</div>
-  <div id="music-toggle" onclick="toggleMusic()">
-    <svg viewBox="0 0 24 24" fill="white">
-      <path d="M3 9v6h4l5 5V4L7 9H3z"/>
-      <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
-      <path d="M14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-    </svg>
-    <div class="music-slash"></div>
-  </div>
+</div>
+
+<!-- Music toggle stays at window corner (not scaled with stage) -->
+<div id="music-toggle" onclick="toggleMusic()">
+  <svg viewBox="0 0 24 24" fill="white">
+    <path d="M3 9v6h4l5 5V4L7 9H3z"/>
+    <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+    <path d="M14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+  </svg>
+  <div class="music-slash"></div>
 </div>
 
 <!-- Game Viewport -->
@@ -617,6 +643,10 @@ function getNavTarget(dir) {
 //  State
 // ═══════════════════════════════════════════════════
 let state = 'select'; // select | browsing | viewing | message
+// Reflect state on body for CSS (e.g. hide parallax layers on select screen)
+window.addEventListener('DOMContentLoaded', () => {
+  document.body.classList.add('on-select');
+});
 let album = null;
 let page = 0;
 let cursorIdx = 0;
@@ -630,6 +660,10 @@ let msgTyping = false;   // typewriter in progress
 let msgTypingTimer = null;
 let msgPrevLines = '';   // accumulated previous lines in current box
 let animating = false;
+const bgPreloadCache = {};
+const DEBUG_FRAME = false; // 开启逐帧调试（按 Enter 前进一帧）
+let _debugFrameAdvance = false; // 内部用，逐帧推进信号
+let _debugAnimTickFn = null;    // 内部用，当前调试动画的 tick 函数
 
 // Cursor bob animation
 let cursorBobAngle = 0;
@@ -704,12 +738,19 @@ window.addEventListener('DOMContentLoaded', () => {
   drawArrowIcons();
   drawKeyIcons();
   updateSelectCursor(); // Set initial select background
-  // Preload all background images
+  // Preload all background images (with promises for waiting)
   ['assets/ui/Faraway_polaroidBG_FA_day.png',
    'assets/ui/Dreamworld_polaroidBG_FA_day.png',
    'assets/ui/Faraway_polaroidBG_FA.png',
    'assets/ui/Dreamworld_polaroidBG_FA.png'
-  ].forEach(src => { const img = new Image(); img.src = src; });
+  ].forEach(src => {
+    const img = new Image();
+    bgPreloadCache[src] = new Promise(r => {
+      img.onload = r; img.onerror = r;
+      img.src = src;
+      if (img.complete) r();
+    });
+  });
   startLoop();
   $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.png')`;
 
@@ -816,10 +857,12 @@ function drawCovers() {
 // ═══════════════════════════════════════════════════
 //  Main Loop (parallax + cursor animation)
 // ═══════════════════════════════════════════════════
+let resetParallax = () => {}; // populated when startLoop runs
 function startLoop() {
   const $fg = document.getElementById('parallax-fg');
   let parallaxX = 0;
   let lastParallaxSnap = 0;
+  resetParallax = () => { parallaxX = 0; lastParallaxSnap = 0; };
 
   function tick() {
 
@@ -866,13 +909,22 @@ function startLoop() {
 //  Viewport scaling
 // ═══════════════════════════════════════════════════
 function updateScale() {
+  // Album view: letterbox (fit)
   const scale = Math.min(
     window.innerWidth / 640,
     window.innerHeight / 480
   );
   $scene.style.transform = `scale(${scale})`;
+
+  // Select screen: cover (fill + crop) but capped at 1 — never grow beyond natural size
+  const selectScale = Math.min(1, Math.max(
+    window.innerWidth / 1280,
+    window.innerHeight / 720
+  ));
+  document.documentElement.style.setProperty('--select-scale', selectScale);
 }
 window.addEventListener('resize', updateScale);
+updateScale();
 
 // ═══════════════════════════════════════════════════
 //  Album Select
@@ -918,6 +970,18 @@ function openAlbum(key) {
   page = 0;
   cursorIdx = 0;
 
+  // Start loading the fg image IMMEDIATELY (before fade to black)
+  // so it has time to load and paint before we reveal the scene
+  const $fgEarly = document.getElementById('parallax-fg');
+  if (album.parallaxFg) {
+    const currentBg = $fgEarly.style.backgroundImage;
+    const newBg = `url("${album.parallaxFg}")`;
+    // Only update if different (matches quoted form)
+    if (!currentBg.includes(album.parallaxFg)) {
+      $fgEarly.style.backgroundImage = `url('${album.parallaxFg}')`;
+    }
+  }
+
   // Fade to black
   const $trans = document.getElementById('scene-transition');
   $trans.classList.add('active');
@@ -927,8 +991,10 @@ function openAlbum(key) {
     // Switch backgrounds
     $parallax.style.backgroundImage = `url('${album.parallax}')`;
     $parallax.style.backgroundPosition = '0 0';
+    resetParallax();
     const $fg = document.getElementById('parallax-fg');
-    $fg.style.backgroundImage = album.parallaxFg ? `url('${album.parallaxFg}')` : 'none';
+    // fg backgroundImage is already set earlier (before fade-to-black)
+    if (!album.parallaxFg) $fg.style.backgroundImage = 'none';
 
     // Switch screens
     $select.style.display = 'none';
@@ -963,6 +1029,7 @@ function openAlbum(key) {
       updateCursor();
       $cursor.style.display = 'block';
       state = 'browsing';
+      document.body.classList.remove('on-select');
 
       // Wait for thumbnails + page overlay + parallax bg/fg
       const allImgs = [...$slots.querySelectorAll('img'), $pageOverlay];
@@ -992,8 +1059,12 @@ function openAlbum(key) {
         $pageTurnR.style.visibility = '';
         $cursor.style.visibility = '';
 
-        // Fade back in from black
-        $trans.classList.remove('active');
+        // Wait 2 frames to ensure CSS backgrounds are actually painted
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            $trans.classList.remove('active');
+          });
+        });
       });
 
       $legend.style.boxShadow = '0 -500px 0 500px #000';
@@ -1001,7 +1072,13 @@ function openAlbum(key) {
       $legend.style.transform = 'translateY(0)';
       updateLegend();
     };
+    // Faraway album has slightly aged/yellowed pages
+    $bookBg.classList.toggle('aged', key === 'faraway');
     $bookBg.src = album.bookImage;
+    // Handle both cached and uncached: if already complete, call onload manually
+    if ($bookBg.complete && $bookBg.naturalWidth > 0) {
+      $bookBg.onload();
+    }
   }, 350);
 }
 
@@ -1245,19 +1322,21 @@ function startViewing() {
   // Show viewer
   $viewer.classList.add('active');
 
-  // Photo slides up from bottom
-  $viewerPhoto.style.transform = 'translate(-50%, 70%)';
-  $viewerPhoto.style.opacity = '0';
+  // ── Set initial state (no transition yet) ──
+  const isFaraway = (album === ALBUMS.faraway);
+  $viewerPhoto.style.transition = 'none';
+  $viewerPhoto.style.transform = 'translate(-50%, calc(20% + 0px))';
+  $viewerPhoto.style.opacity = isFaraway ? '0' : '1';
 
-  // Album + page turn controls slide down together
-  $book.style.transition = 'transform 0.5s cubic-bezier(0.33,1,0.68,1), opacity 0.6s';
+  // Album slide down (slower: 0.8s)
+  $book.style.transition = 'transform 0.3s cubic-bezier(0.7,0,1,0.5) 0.02s, opacity 0.35s cubic-bezier(0.7,0,1,0.5) 0.02s';
   $book.style.transform = 'translateY(500px)';
   $book.style.opacity = '0';
   $cursor.style.display = 'none';
 
   // Page turn controls slide down with album
-  $pageTurnL.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.6s';
-  $pageTurnR.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.6s';
+  $pageTurnL.style.transition = 'transform 0.27s cubic-bezier(0.7,0,1,0.5) 0.02s, opacity 0.35s cubic-bezier(0.7,0,1,0.5) 0.02s';
+  $pageTurnR.style.transition = 'transform 0.27s cubic-bezier(0.7,0,1,0.5) 0.02s, opacity 0.35s cubic-bezier(0.7,0,1,0.5) 0.02s';
   $pageTurnL.style.transform = 'translateY(500px)';
   $pageTurnR.style.transform = 'translateY(500px)';
   $pageTurnL.style.opacity = '0';
@@ -1268,32 +1347,115 @@ function startViewing() {
   $legend.style.transform = 'translateY(-40px)';
   $photoInfo.style.display = 'none';
 
-  // Start viewer arrows off-screen (no transition for initial placement)
-  const hasPrev = viewingIdx > 0;
-  const lastVisibleIdx = album.pages.flat().filter(n => n > 0).length - 1;
-  const hasNext = viewingIdx < lastVisibleIdx;
+  // Viewer arrows — start at final position but invisible, slide in together with photo
   $viewerArrowL.classList.add('no-transition');
   $viewerArrowR.classList.add('no-transition');
-  $viewerArrowL.style.transform = 'translateY(calc(-50% - 60px)) translateX(-380px)';
-  $viewerArrowR.style.transform = 'translateY(calc(-50% - 60px)) translateX(285px)';
-  $viewerArrowL.style.opacity = hasPrev ? '1' : '0';
-  $viewerArrowR.style.opacity = hasNext ? '1' : '0';
-
-  setTimeout(() => {
-    $viewerPhoto.style.transform = 'translate(-50%, -50%)';
-    $viewerPhoto.style.opacity = '1';
-
-    // Re-enable transition, then slide in
-    $viewerArrowL.classList.remove('no-transition');
-    $viewerArrowR.classList.remove('no-transition');
-    updateViewerArrows();
-  }, 50);
+  $viewerArrowL.style.transform = 'translateY(calc(-50% - 60px)) translateX(-72px)';
+  $viewerArrowR.style.transform = 'translateY(calc(-50% - 60px)) translateX(72px)';
+  $viewerArrowL.style.opacity = '0';
+  $viewerArrowR.style.opacity = '0';
 
   // Show SHIFT READ prompt
   $shiftRead.style.opacity = photoHasText(viewingIdx) ? '1' : '0';
   $shiftRead.classList.toggle('has-outline', album.readOutline);
 
+  // ── Debug frame-step mode ──
+  if (typeof DEBUG_FRAME !== 'undefined' && DEBUG_FRAME) {
+    _startViewingDebug();
+    return;
+  }
+
+  // ── Normal mode: use CSS transitions (GPU-accelerated, smooth) ──
+  // Force layout flush so initial state is applied, then set targets with transition
+  $viewerPhoto.offsetHeight;
+
+  $viewerPhoto.style.transition = isFaraway
+    ? 'transform 0.35s cubic-bezier(0.33,1,0.68,1), opacity 0.117s'
+    : 'transform 0.35s cubic-bezier(0.33,1,0.68,1)';
+  $viewerPhoto.style.transform = 'translate(-50%, -50%)';
+  $viewerPhoto.style.opacity = '1';
+
+  // Arrows slide in at the same time
+  $viewerArrowL.offsetHeight;
+  $viewerArrowL.classList.remove('no-transition');
+  $viewerArrowR.classList.remove('no-transition');
+  $viewerArrowL.style.transition = '';
+  $viewerArrowR.style.transition = '';
+  updateViewerArrows();
+
   setTimeout(() => { animating = false; }, 450);
+}
+
+// ── Debug: rAF frame-by-frame stepping ──
+function _startViewingDebug() {
+  const isFaraway = (album === ALBUMS.faraway);
+  const PHOTO_DUR = 450, BOOK_DUR = 800;
+  const TOTAL_DUR = Math.max(PHOTO_DUR, BOOK_DUR);
+
+  function cubicBezier(p1x, p1y, p2x, p2y) {
+    return function(t) {
+      if (t <= 0) return 0;
+      if (t >= 1) return 1;
+      let u = t;
+      for (let i = 0; i < 8; i++) {
+        const x = 3*u*(1-u)*(1-u)*p1x + 3*u*u*(1-u)*p2x + u*u*u - t;
+        const dx = 3*(1-u)*(1-u)*p1x + 6*u*(1-u)*(p2x-p1x) + 3*u*u*(1-p2x);
+        if (Math.abs(dx) < 1e-6) break;
+        u -= x / dx;
+      }
+      u = Math.max(0, Math.min(1, u));
+      return 3*u*(1-u)*(1-u)*p1y + 3*u*u*(1-u)*p2y + u*u*u;
+    };
+  }
+  const ease = cubicBezier(0.33, 1, 0.68, 1);
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  const photoYStart = 20, photoYEnd = -50;
+  const photoOffsetStart = -28, photoOffsetEnd = 0;
+  const FRAME_MS = 1000 / 60; // ~16.67ms per frame
+  let frame = 0;
+
+  function tick() {
+    const elapsed = frame * FRAME_MS;
+    frame++;
+
+    const photoT = Math.min(elapsed / PHOTO_DUR, 1);
+    const photoEased = ease(photoT);
+    const photoY = lerp(photoYStart, photoYEnd, photoEased);
+    const photoOffset = lerp(photoOffsetStart, photoOffsetEnd, photoEased);
+    const photoOpacity = isFaraway ? Math.min(elapsed / (PHOTO_DUR / 3), 1) : 1;
+
+    $viewerPhoto.style.transform = `translate(-50%, calc(${photoY}% + ${photoOffset}px))`;
+    $viewerPhoto.style.opacity = String(photoOpacity);
+
+    const bookT = Math.min(elapsed / BOOK_DUR, 1);
+    const bookEased = ease(bookT);
+    const bookY = lerp(0, 500, bookEased);
+    const bookOpacity = 1 - bookEased;
+
+    $book.style.transform = `translateY(${bookY}px)`;
+    $book.style.opacity = String(bookOpacity);
+    $pageTurnL.style.transform = `translateY(${bookY}px)`;
+    $pageTurnR.style.transform = `translateY(${bookY}px)`;
+    $pageTurnL.style.opacity = String(bookOpacity);
+    $pageTurnR.style.opacity = String(bookOpacity);
+
+    console.log(`[frame ${frame}] elapsed=${elapsed.toFixed(1)}ms photoT=${photoT.toFixed(3)} photoY=${photoY.toFixed(1)}% opacity=${photoOpacity.toFixed(3)} bookY=${bookY.toFixed(1)}px`);
+
+    if (elapsed < TOTAL_DUR) {
+      _debugAnimTickFn = tick;
+    } else {
+      $viewerArrowL.classList.remove('no-transition');
+      $viewerArrowR.classList.remove('no-transition');
+      $viewerArrowL.style.transition = '';
+      $viewerArrowR.style.transition = '';
+      updateViewerArrows();
+      animating = false;
+      _debugAnimTickFn = null;
+    }
+  }
+
+  tick(); // render frame 0
 }
 
 function endViewing() {
@@ -1301,11 +1463,13 @@ function endViewing() {
   animating = true;
   state = 'browsing';
 
-  // Photo slides down
-  $viewerPhoto.style.transform = 'translate(-50%, 70%)';
+  // Photo fades out slightly downward
+  $viewerPhoto.style.transform = 'translate(-50%, -20%)';
   $viewerPhoto.style.opacity = '0';
 
-  // Viewer arrows slide out to sides
+  // Viewer arrows slide out to sides (faster than entering)
+  $viewerArrowL.style.transition = 'transform 0.25s ease-in, opacity 0.25s ease-in';
+  $viewerArrowR.style.transition = 'transform 0.25s ease-in, opacity 0.25s ease-in';
   $viewerArrowL.style.transform = 'translateY(calc(-50% - 60px)) translateX(-380px)';
   $viewerArrowR.style.transform = 'translateY(calc(-50% - 60px)) translateX(285px)';
   $shiftRead.style.opacity = '0';
@@ -1319,12 +1483,12 @@ function endViewing() {
   $pageTurnR.style.opacity = '0.6';
 
   requestAnimationFrame(() => {
-    $book.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.5s';
+    $book.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.7s';
     $book.style.transform = 'translateY(0)';
     $book.style.opacity = '1';
 
-    $pageTurnL.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.5s';
-    $pageTurnR.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.5s';
+    $pageTurnL.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.7s';
+    $pageTurnR.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.7s';
     $pageTurnL.style.transform = 'translateY(0)';
     $pageTurnR.style.transform = 'translateY(0)';
     $pageTurnL.style.opacity = '1';
@@ -1643,6 +1807,7 @@ function goBackToSelect() {
   setTimeout(() => {
     // Hidden behind black — switch everything
     state = 'select';
+    document.body.classList.add('on-select');
     album = null;
     $viewport.style.display = 'none';
     $viewer.classList.remove('active');
@@ -1655,7 +1820,7 @@ function goBackToSelect() {
     updateSelectCursor();
     $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.png')`;
     $parallax.style.backgroundPosition = '0 0';
-    document.getElementById('parallax-fg').style.backgroundImage = 'none';
+    // Don't clear parallax-fg — keep it loaded/cached to avoid repaint delay next time
     $legend.style.boxShadow = '';
     // Reset book transforms
     $book.style.transform = '';
@@ -1675,6 +1840,12 @@ function goBackToSelect() {
 //  Keyboard Input
 // ═══════════════════════════════════════════════════
 document.addEventListener('keydown', (e) => {
+  // ── Debug frame-step: press Enter to advance one frame ──
+  if (typeof DEBUG_FRAME !== 'undefined' && DEBUG_FRAME && e.key === 'Enter' && _debugAnimTickFn) {
+    requestAnimationFrame(_debugAnimTickFn);
+    return;
+  }
+
   if (animating && state !== 'message' && state !== 'viewing') return;
   const key = e.key;
 
