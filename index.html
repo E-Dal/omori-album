@@ -82,7 +82,7 @@
     transition: opacity 0.25s;
   }
   #select-bg-fade.active { opacity: 1; }
-  #album-select h1 { color: #fff; font-size: 24px; letter-spacing: 4px; }
+  #album-select h1 { color: #fff; font-size: 30px; letter-spacing: 4px; }
   .album-covers { display: flex; gap: 50px; }
   .album-cover-btn {
     text-align: center;
@@ -90,11 +90,46 @@
   }
   .album-cover-btn.selected { transform: scale(1.08); }
   .album-cover-btn canvas { height: 240px; width: auto; }
-  .album-cover-label { color: #ccc; margin-top: 10px; font-size: 14px; letter-spacing: 1px; }
+  .album-cover-label { color: #ccc; margin-top: 5px; font-size: 16px; letter-spacing: 1px; }
   .album-cover-btn.selected .album-cover-label { color: #fff; }
+  /* Stage roller (above each album cover) — click triangles to switch */
+  .stage-roller {
+    width: 100%;
+    height: 32px;
+    margin-bottom: 10px;
+    display: flex; flex-direction: row;
+    align-items: center; justify-content: center;
+    gap: 14px;
+    color: #fff; font-size: 15px; letter-spacing: 2px;
+    text-align: center;
+    transform: translateY(14px);
+  }
+  .stage-arrow {
+    width: 0; height: 0;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.15s;
+    flex-shrink: 0;
+  }
+  .stage-left  { border-right: 10px solid #fff; margin-right: -25px; }
+  .stage-right { border-left:  10px solid #fff; margin-left:  -25px; }
+  .stage-left:hover  { border-right-color: #ffcc66; }
+  .stage-right:hover { border-left-color:  #ffcc66; }
+  .stage-left.disabled  { border-right-color: #3a3a3a; cursor: default; pointer-events: none; }
+  .stage-right.disabled { border-left-color:  #3a3a3a; cursor: default; pointer-events: none; }
+  .stage-current {
+    min-width: 140px;
+    font-weight: bold;
+    transition: color 0.15s;
+    pointer-events: none;
+  }
+  .album-cover-btn:not(.selected) .stage-roller { opacity: 0.55; }
+  .album-cover-btn:not(.selected) .stage-current { color: #bbb; }
   .select-cursor {
     width: 38px; height: 22px;
-    margin: 8px auto 0;
+    margin: 20px auto 0;
     visibility: hidden;
     transform: rotate(-90deg);
   }
@@ -122,7 +157,7 @@
     background: #000;
     border-bottom: 3px solid #fff;
     display: flex; align-items: center; justify-content: space-between;
-    padding: 0 620px;
+    padding: 0 715px;
     z-index: 30;
     transition: opacity 0.3s, transform 0.3s;
   }
@@ -150,7 +185,7 @@
                 opacity 0.3s;
   }
   #book-bg { display: block; }
-  #book-bg.aged { filter: sepia(0.06) brightness(0.96); }
+  /* FA book-bg already has aging baked in from the source image, no extra filter needed */
   #page-text-overlay {
     position: absolute; top: 0; left: 0;
     width: 100%; height: 100%;
@@ -164,6 +199,14 @@
     width: 86px; height: 101px;
   }
   .photo-slot img { width: 100%; height: 100%; }
+  /* Slow fade-in for the just-discovered easter egg photo */
+  .photo-slot.fade-in-egg img {
+    animation: fade-in-egg 2.5s ease-out;
+  }
+  @keyframes fade-in-egg {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+  }
 
   /* ── Hand cursor ── */
   #hand-cursor {
@@ -171,7 +214,14 @@
     z-index: 25;
     pointer-events: none;
     transition: left 0.12s cubic-bezier(0.33,1,0.68,1),
-                top 0.12s cubic-bezier(0.33,1,0.68,1);
+                top 0.12s cubic-bezier(0.33,1,0.68,1),
+                transform 0.3s cubic-bezier(0.33,1,0.68,1),
+                opacity 0.35s;
+  }
+  /* Inactive state (e.g. while reading a description): matches OMORI's
+     setColorTone([-80,-80,-80,255]) — dimmed + fully desaturated */
+  #hand-cursor.inactive {
+    filter: grayscale(100%) brightness(0.7);
   }
 
   /* ── Page turn controls (game-accurate) ── */
@@ -310,6 +360,7 @@
     transform: translateX(calc(-50% - 17px));
     display: flex; align-items: center; gap: 8px;
     z-index: 40;
+    transition: opacity 0.25s ease;
   }
   #shift-read-prompt .legend-icon { height: 24px; position: relative; top: 6px; left: -3px; }
   #shift-read-prompt span {
@@ -438,11 +489,21 @@
     <h1>BASIL'S PHOTO ALBUM</h1>
     <div class="album-covers">
       <div class="album-cover-btn selected" data-album="dreamworld">
+        <div class="stage-roller" data-album="dreamworld">
+          <div class="stage-arrow stage-left" data-dir="-1"></div>
+          <div class="stage-current"></div>
+          <div class="stage-arrow stage-right" data-dir="1"></div>
+        </div>
         <canvas id="cover-dw" width="241" height="325"></canvas>
         <div class="album-cover-label">HEADSPACE</div>
         <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
       </div>
       <div class="album-cover-btn" data-album="faraway">
+        <div class="stage-roller" data-album="faraway">
+          <div class="stage-arrow stage-left" data-dir="-1"></div>
+          <div class="stage-current"></div>
+          <div class="stage-arrow stage-right" data-dir="1"></div>
+        </div>
         <canvas id="cover-fa" width="241" height="325"></canvas>
         <div class="album-cover-label">FARAWAY TOWN</div>
         <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
@@ -566,11 +627,22 @@ const ALBUMS = {
     selectBg: 'assets/ui/bg_headspace.png',
     selectGif: 'assets/ui/group_dw.gif',
     pageTextPrefix: 'assets/pages/dream_pg',
-    maxPages: 2, totalPhotos: 12,
     thumbPrefix: 'assets/thumbnails/DW_POLAROID_',
     fullPrefix: 'assets/fullsize/DW_A_',
-    pages: [[1,2,3,4,5,6],[7,8,9,10,11,0]],
-    texts: null, // loaded from album_segments.json
+    thumbSuffix: '', fullSuffix: '',
+    // Defaults — overridden by current stage in openAlbum()
+    maxPages: 2, totalPhotos: 12,
+    pages: [[1,2,3,4,5,6],[7,8,9,10,11,12]],
+    texts: null,
+    stages: ['PROLOGUE', 'POST-RESET', 'CONSOLE'],
+    stageData: [
+      // PROLOGUE: 12 photos (DW_A_12 at slot 11 is the blurry group photo)
+      { maxPages: 2, totalPhotos: 12, pages: [[1,2,3,4,5,6],[7,8,9,10,11,12]] },
+      // POST-RESET: slot 11 shows DW_A_13 (clear group photo), no console extras
+      { maxPages: 2, totalPhotos: 12, pages: [[1,2,3,4,5,6],[7,8,9,10,11,13]] },
+      // CONSOLE: POST-RESET + 6 console-exclusive photos on page 3
+      { maxPages: 3, totalPhotos: 18, pages: [[1,2,3,4,5,6],[7,8,9,10,11,13],[14,15,16,17,18,19]] },
+    ],
   },
   faraway: {
     name: 'FARAWAY TOWN',
@@ -582,16 +654,78 @@ const ALBUMS = {
     selectBg: 'assets/ui/bg_faraway.png',
     selectGif: 'assets/ui/group_fa.gif',
     pageTextPrefix: 'assets/pages/faraway_pg',
-    maxPages: 8, totalPhotos: 48,
     thumbPrefix: 'assets/thumbnails/FA_POLAROID_',
     fullPrefix: 'assets/fullsize/FA_A_',
+    thumbSuffix: '', fullSuffix: '',
+    maxPages: 8, totalPhotos: 48,
     pages: [
-      [1,2,3,4,5,6],[7,8,9,10,11,12],[13,14,15,16,17,18],[19,20,21,22,23,24],
-      [25,26,27,28,29,30],[31,32,33,34,35,36],[37,38,39,40,41,42],[43,44,45,46,47,48],
+      [1,2,3,4,5,6],[7,8,9,10,11,12],
+      [13,14,15,16,17,18],[19,20,21,22,23,24],
+      [25,26,27,28,29,30],[31,32,33,34,35,36],
+      [37,38,39,40,41,42],[43,44,45,46,47,48],
     ],
-    texts: null, // loaded from album_segments.json
+    texts: null,
+    stages: ['INITIAL', 'MARI BACK', '+TREEHOUSE', 'MIXED ROUTE'],
+    stageData: [
+      // INITIAL: Mari (22 photos) + Treehouse (37) hidden as empty slots
+      { maxPages: 8, totalPhotos: 48, pages: [
+        [1, 0, 0, 4, 5, 0],
+        [0, 8, 9,10,11,12],
+        [0, 0, 0,16, 0,18],
+        [19,20,21,22, 0, 0],
+        [25,26,27, 0, 0, 0],
+        [31,32,33,34,35, 0],
+        [0,38, 0, 0, 0, 0],
+        [43,44, 0, 0, 0, 0],
+      ]},
+      // MARI BACK: All except 37 (treehouse)
+      { maxPages: 8, totalPhotos: 48, pages: [
+        [1,2,3,4,5,6],[7,8,9,10,11,12],
+        [13,14,15,16,17,18],[19,20,21,22,23,24],
+        [25,26,27,28,29,30],[31,32,33,34,35,36],
+        [0,38,39,40,41,42],[43,44,45,46,47,48],
+      ]},
+      // +TREEHOUSE: full 48
+      { maxPages: 8, totalPhotos: 48, pages: [
+        [1,2,3,4,5,6],[7,8,9,10,11,12],
+        [13,14,15,16,17,18],[19,20,21,22,23,24],
+        [25,26,27,28,29,30],[31,32,33,34,35,36],
+        [37,38,39,40,41,42],[43,44,45,46,47,48],
+      ]},
+      // MIXED ROUTE: same layout as INITIAL but uses scribbled variants
+      {
+        maxPages: 8, totalPhotos: 48,
+        fullPrefix: 'assets/fullsize/FA_AS_',
+        thumbSuffix: 'S',
+        pages: [
+          [1, 0, 0, 4, 5, 0],
+          [0, 8, 9,10,11,12],
+          [0, 0, 0,16, 0,18],
+          [19,20,21,22, 0, 0],
+          [25,26,27, 0, 0, 0],
+          [31,32,33,34,35, 0],
+          [0,38, 0, 0, 0, 0],
+          [43,44, 0, 0, 0, 0],
+        ],
+      },
+    ],
   },
 };
+
+// Current stage index per album (indexed by album key)
+const stageIdx = { dreamworld: 0, faraway: 0 };
+
+// Easter egg: the blurry group photo (DW_A_12) at slot 11 of PROLOGUE.
+// Hidden by default. Revealed by pressing right arrow while viewing photo 11.
+// Session-only (resets on refresh so you can always see the "original" album).
+let easterEgg12Discovered = false;
+let justDiscoveredEgg = false;   // one-shot flag for fade-in animation
+
+function isDW12Hidden() {
+  return album === ALBUMS.dreamworld
+      && stageIdx.dreamworld === 0
+      && !easterEgg12Discovered;
+}
 
 // Load segmented text data
 fetch('assets/album_segments.json?v=' + Date.now()).then(r => r.json()).then(data => {
@@ -622,21 +756,29 @@ const NAV_BASE = {
 function photoHasText(globalIdx) {
   if (!album || !album.texts) return false;
   const boxes = album.texts[globalIdx];
-  return boxes && boxes.length > 0 && boxes[0][0] !== '...';
+  if (!boxes || boxes.length === 0) return false;
+  // Box structure: boxes[boxIdx][lineIdx] where line is {text, inline} or a string
+  const firstLine = boxes[0] && boxes[0][0];
+  const text = typeof firstLine === 'string' ? firstLine : (firstLine && firstLine.text);
+  return text && text !== '...';
 }
 
 // Check if a slot has a photo on the current page
 function slotHasPhoto(slotIdx) {
   if (!album) return false;
   const photos = album.pages[page] || [];
-  return slotIdx < photos.length && photos[slotIdx] > 0;
+  if (!(slotIdx < photos.length && photos[slotIdx] > 0)) return false;
+  // Hide the DW PROLOGUE slot 11 easter egg (photo 12) until discovered
+  if (isDW12Hidden() && page === 1 && slotIdx === 5) return false;
+  return true;
 }
 
-// Get valid nav target (only move to slots that have photos)
+// Get valid nav target (game allows moving onto empty slots too)
 function getNavTarget(dir) {
   const target = NAV_BASE[cursorIdx]?.[dir];
-  if (target !== undefined && slotHasPhoto(target)) return target;
-  return undefined;
+  // Only block navigation to the specific easter egg slot; other empty slots remain selectable
+  if (target !== undefined && isDW12Hidden() && page === 1 && target === 5) return undefined;
+  return target;
 }
 
 // ═══════════════════════════════════════════════════
@@ -657,6 +799,7 @@ let msgBoxes = [];       // current message boxes array (each box = array of lin
 let msgBoxIdx = 0;       // current box index
 let msgLineIdx = 0;      // current line index within current box
 let msgTyping = false;   // typewriter in progress
+let msgSkipMode = false; // once user skips once, rest of message types instantly
 let msgTypingTimer = null;
 let msgPrevLines = '';   // accumulated previous lines in current box
 let animating = false;
@@ -738,6 +881,7 @@ window.addEventListener('DOMContentLoaded', () => {
   drawArrowIcons();
   drawKeyIcons();
   updateSelectCursor(); // Set initial select background
+  updateStageRollers();
   // Preload all background images (with promises for waiting)
   ['assets/ui/Faraway_polaroidBG_FA_day.png',
    'assets/ui/Dreamworld_polaroidBG_FA_day.png',
@@ -931,6 +1075,41 @@ updateScale();
 // ═══════════════════════════════════════════════════
 let currentSelectBg = '';
 
+// Update both stage rollers (current label + grey out arrows at edges)
+function updateStageRollers() {
+  document.querySelectorAll('.stage-roller').forEach(roller => {
+    const key = roller.dataset.album;
+    const album = ALBUMS[key];
+    const idx = stageIdx[key];
+    const stages = album.stages || [];
+    roller.querySelector('.stage-current').textContent = stages[idx] || '';
+    roller.querySelector('.stage-left').classList.toggle('disabled', idx <= 0);
+    roller.querySelector('.stage-right').classList.toggle('disabled', idx >= stages.length - 1);
+  });
+}
+
+// Click-triggered stage change (used by arrows)
+function changeAlbumStage(albumKey, delta) {
+  const stages = ALBUMS[albumKey].stages || [];
+  const next = stageIdx[albumKey] + delta;
+  if (next < 0 || next >= stages.length) return;
+  stageIdx[albumKey] = next;
+  updateStageRollers();
+}
+
+// Wire up arrow clicks (once, after DOM is ready)
+window.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.stage-arrow').forEach(arrow => {
+    arrow.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const roller = arrow.closest('.stage-roller');
+      const albumKey = roller.dataset.album;
+      const dir = Number(arrow.dataset.dir);
+      changeAlbumStage(albumKey, dir);
+    });
+  });
+});
+
 function updateSelectCursor() {
   const btns = document.querySelectorAll('.album-cover-btn');
   btns.forEach((b, i) => b.classList.toggle('selected', i === selectIdx));
@@ -950,14 +1129,29 @@ function updateSelectCursor() {
       $sgif.src = selectedAlbum.selectGif;
       currentSelectBg = newBg;
     } else {
-      // Fade transition on background only
+      // Preload new GIF + bg in parallel with the fade-to-black
+      const newGif = selectedAlbum.selectGif;
+      const gifPreload = new Image();
+      const bgPreload = new Image();
+      const gifReady = new Promise(r => { gifPreload.onload = r; gifPreload.onerror = r; gifPreload.src = newGif; if (gifPreload.complete) r(); });
+      const bgReady = new Promise(r => { bgPreload.onload = r; bgPreload.onerror = r; bgPreload.src = newBg; if (bgPreload.complete) r(); });
+
+      // Fade to black
       $sfade.classList.add('active');
-      setTimeout(() => {
+      const fadeDone = new Promise(r => setTimeout(r, 250));
+
+      Promise.all([gifReady, bgReady, fadeDone]).then(() => {
+        // Everything loaded AND fade is fully black: swap under cover
         $sbg.style.backgroundImage = `url('${newBg}')`;
-        $sgif.src = selectedAlbum.selectGif;
+        $sgif.src = newGif;
         currentSelectBg = newBg;
-        setTimeout(() => $sfade.classList.remove('active'), 50);
-      }, 250);
+        // Give browser a frame to paint the new content before lifting the fade
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            $sfade.classList.remove('active');
+          });
+        });
+      });
     }
   }
 }
@@ -965,8 +1159,58 @@ function updateSelectCursor() {
 // ═══════════════════════════════════════════════════
 //  Open Album
 // ═══════════════════════════════════════════════════
+// Photo filename helpers (respect thumbSuffix/fullSuffix overrides)
+function thumbUrl(albumObj, num) {
+  return `${albumObj.thumbPrefix}${String(num).padStart(2,'0')}${albumObj.thumbSuffix || ''}.png`;
+}
+function fullUrl(albumObj, num) {
+  return `${albumObj.fullPrefix}${String(num).padStart(2,'0')}${albumObj.fullSuffix || ''}.png?v=2`;
+}
+
+// Given a global slot index (0 to maxPages*6 - 1), return actual photo number at that slot (0 = empty)
+function photoNumAtIdx(idx) {
+  if (!album || !album.pages) return 0;
+  const p = Math.floor(idx / 6);
+  const c = idx % 6;
+  return (album.pages[p] || [])[c] || 0;
+}
+
+// Find next non-empty slot from `from` in direction dir (+1 or -1). Returns -1 if none.
+function nextVisibleIdx(from, dir) {
+  const total = (album?.maxPages || 0) * 6;
+  let idx = from + dir;
+  while (idx >= 0 && idx < total) {
+    if (photoNumAtIdx(idx)) return idx;
+    idx += dir;
+  }
+  return -1;
+}
+
+// Apply the given stage's data onto the album object (overriding pages/maxPages/prefixes)
+function applyStage(albumObj, stageNum) {
+  const sd = (albumObj.stageData || [])[stageNum];
+  if (!sd) return;
+  // Restore original defaults first (in case prior stage overrode them)
+  if (!albumObj._baseline) {
+    albumObj._baseline = {
+      fullPrefix: albumObj.fullPrefix,
+      thumbPrefix: albumObj.thumbPrefix,
+      fullSuffix: albumObj.fullSuffix || '',
+      thumbSuffix: albumObj.thumbSuffix || '',
+    };
+  }
+  albumObj.fullPrefix  = sd.fullPrefix  ?? albumObj._baseline.fullPrefix;
+  albumObj.thumbPrefix = sd.thumbPrefix ?? albumObj._baseline.thumbPrefix;
+  albumObj.fullSuffix  = sd.fullSuffix  ?? albumObj._baseline.fullSuffix;
+  albumObj.thumbSuffix = sd.thumbSuffix ?? albumObj._baseline.thumbSuffix;
+  albumObj.maxPages    = sd.maxPages    ?? albumObj.maxPages;
+  albumObj.totalPhotos = sd.totalPhotos ?? albumObj.totalPhotos;
+  if (sd.pages) albumObj.pages = sd.pages;
+}
+
 function openAlbum(key) {
   album = ALBUMS[key];
+  applyStage(album, stageIdx[key] || 0);
   page = 0;
   cursorIdx = 0;
 
@@ -1092,13 +1336,19 @@ function renderPage() {
   const photos = album.pages[page] || [];
   photos.forEach((num, i) => {
     if (!num) return;
+    // Hide DW PROLOGUE slot 11 easter egg until discovered
+    if (isDW12Hidden() && page === 1 && i === 5) return;
     const pos = SLOT_POS[i];
     const slot = document.createElement('div');
     slot.className = 'photo-slot';
+    // Fade-in animation for the just-revealed easter egg thumbnail
+    if (justDiscoveredEgg && album === ALBUMS.dreamworld && stageIdx.dreamworld === 0 && page === 1 && i === 5) {
+      slot.classList.add('fade-in-egg');
+    }
     slot.style.left = pos.x + 'px';
     slot.style.top = pos.y + 'px';
     const img = document.createElement('img');
-    img.src = `${album.thumbPrefix}${String(num).padStart(2,'0')}.png`;
+    img.src = thumbUrl(album, num);
     slot.appendChild(img);
     $slots.appendChild(slot);
   });
@@ -1111,13 +1361,13 @@ function renderPage() {
   // Preload fullsize photos for current page + thumbnails for adjacent pages
   (album.pages[page] || []).forEach(num => {
     if (!num) return;
-    new Image().src = `${album.fullPrefix}${String(num).padStart(2,'0')}.png?v=2`;
+    new Image().src = fullUrl(album, num);
   });
   [page - 1, page + 1].forEach(p => {
     if (p < 0 || p >= album.maxPages) return;
     (album.pages[p] || []).forEach(num => {
       if (!num) return;
-      new Image().src = `${album.thumbPrefix}${String(num).padStart(2,'0')}.png`;
+      new Image().src = thumbUrl(album, num);
     });
   });
 }
@@ -1139,8 +1389,8 @@ function updateCursor() {
 
 function updateLegend() {
   if (state === 'browsing') {
-    const globalIdx = page * 6 + cursorIdx;
-    const hasText = photoHasText(globalIdx);
+    const num = photoNumAtIdx(page * 6 + cursorIdx);
+    const hasText = num > 0 && photoHasText(num - 1);
     $legendRead.style.visibility = hasText ? 'visible' : 'hidden';
 
     // Update photo info bar with date/title (first line of first segment)
@@ -1315,9 +1565,9 @@ function startViewing() {
   state = 'viewing';
   animating = true;
 
-  // Setup photo
-  const num = viewingIdx + 1;
-  $viewerPhoto.src = `${album.fullPrefix}${String(num).padStart(2,'0')}.png?v=2`;
+  // Setup photo — use actual photo number from pages[page][slot], not slot index
+  const num = photoNumAtIdx(viewingIdx);
+  $viewerPhoto.src = fullUrl(album, num);
 
   // Show viewer
   $viewer.classList.add('active');
@@ -1332,7 +1582,12 @@ function startViewing() {
   $book.style.transition = 'transform 0.3s cubic-bezier(0.7,0,1,0.5) 0.02s, opacity 0.35s cubic-bezier(0.7,0,1,0.5) 0.02s';
   $book.style.transform = 'translateY(500px)';
   $book.style.opacity = '0';
-  $cursor.style.display = 'none';
+  // Cursor turns gray + slides down with the book + fades out.
+  // Don't reset marginLeft — freeze wherever the bob was (no snap/teleport).
+  $cursor.classList.add('inactive');
+  $cursor.style.transition = 'transform 0.3s cubic-bezier(0.7,0,1,0.5) 0.02s, opacity 0.35s cubic-bezier(0.7,0,1,0.5) 0.02s';
+  $cursor.style.transform = 'translateY(500px)';
+  $cursor.style.opacity = '0';
 
   // Page turn controls slide down with album
   $pageTurnL.style.transition = 'transform 0.27s cubic-bezier(0.7,0,1,0.5) 0.02s, opacity 0.35s cubic-bezier(0.7,0,1,0.5) 0.02s';
@@ -1355,8 +1610,8 @@ function startViewing() {
   $viewerArrowL.style.opacity = '0';
   $viewerArrowR.style.opacity = '0';
 
-  // Show SHIFT READ prompt
-  $shiftRead.style.opacity = photoHasText(viewingIdx) ? '1' : '0';
+  // Show SHIFT READ prompt (index texts by photo number - 1)
+  $shiftRead.style.opacity = photoHasText(num - 1) ? '1' : '0';
   $shiftRead.classList.toggle('has-outline', album.readOutline);
 
   // ── Debug frame-step mode ──
@@ -1463,7 +1718,14 @@ function endViewing() {
   animating = true;
   state = 'browsing';
 
-  // Photo fades out slightly downward
+  // Easter egg discovery: exiting from photo 12 unlocks the blurry thumbnail (session-only)
+  const discoveringEgg = isDW12Hidden() && viewingIdx === 11;
+  if (discoveringEgg) {
+    easterEgg12Discovered = true;
+  }
+
+  // Photo fades out slightly downward (explicit transition so Headspace also fades)
+  $viewerPhoto.style.transition = 'transform 0.35s cubic-bezier(0.33,1,0.68,1), opacity 0.25s';
   $viewerPhoto.style.transform = 'translate(-50%, -20%)';
   $viewerPhoto.style.opacity = '0';
 
@@ -1493,7 +1755,14 @@ function endViewing() {
     $pageTurnR.style.transform = 'translateY(0)';
     $pageTurnL.style.opacity = '1';
     $pageTurnR.style.opacity = '1';
+
+    // Cursor (still gray) slides back up with book and fades in.
+    // Don't reset marginLeft — preserve frozen horizontal position.
+    $cursor.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.7s';
+    $cursor.style.transform = 'translateY(0)';
+    $cursor.style.opacity = '1';
   });
+  // Gray tint removed in the setTimeout below (after ~450ms) when animating=false
 
   // Legend shows
   $legend.style.opacity = '1';
@@ -1510,17 +1779,28 @@ function endViewing() {
 
   setTimeout(() => {
     $viewer.classList.remove('active');
-    $cursor.style.display = 'block';
     updateCursor();
+    // Cursor fully back: drop gray tint, resume bobbing
+    $cursor.classList.remove('inactive');
     animating = false;
-  }, 400);
+    // Trigger fade-in rerender of the unlocked easter egg thumbnail
+    if (discoveringEgg) {
+      justDiscoveredEgg = true;
+      renderPage();
+      setTimeout(() => { justDiscoveredEgg = false; }, 3000);
+    }
+  }, 450);
 }
 
 function updateViewerArrows() {
-  const hasPrev = viewingIdx > 0;
-  // Hide the right arrow on the photo before hidden ones (easter egg!)
-  const lastVisibleIdx = album.pages.flat().filter(n => n > 0).length - 1;
-  const hasNext = viewingIdx < lastVisibleIdx;
+  // Check for any non-empty slot before/after current position
+  let hasPrev = nextVisibleIdx(viewingIdx, -1) >= 0;
+  let hasNext = nextVisibleIdx(viewingIdx, 1) >= 0;
+  // Easter egg: hide right arrow at photo 11 (pre-discovery), hide both at photo 12
+  if (isDW12Hidden()) {
+    if (viewingIdx === 10) hasNext = false;       // photo 11: pretend there's no next
+    if (viewingIdx === 11) { hasPrev = false; hasNext = false; }  // photo 12 (easter): no arrows
+  }
   // translateX(0) = at fixed left position (visible), negative/positive = off-screen
   $viewerArrowL.style.transform = hasPrev
     ? 'translateY(calc(-50% - 60px)) translateX(0)'
@@ -1534,8 +1814,11 @@ function updateViewerArrows() {
 
 function slideViewingPhoto(dir) {
   if (animating) return;
-  const newIdx = viewingIdx + dir;
-  if (newIdx < 0 || newIdx >= album.totalPhotos) return;
+  // Easter egg photo: no nav allowed — user must press X to exit
+  if (isDW12Hidden() && viewingIdx === 11) return;
+  // Skip empty slots — find next/prev slot that has a photo
+  const newIdx = nextVisibleIdx(viewingIdx, dir);
+  if (newIdx < 0) return;
 
   playSfx();
   animating = true;
@@ -1561,8 +1844,8 @@ function slideViewingPhoto(dir) {
 
   // New photo slides in on top from the side
   viewingIdx = newIdx;
-  const num = viewingIdx + 1;
-  const newSrc = `${album.fullPrefix}${String(num).padStart(2,'0')}.png?v=2`;
+  const num = photoNumAtIdx(viewingIdx);
+  const newSrc = fullUrl(album, num);
 
   // Set up slide-in position first, then change src
   $viewerPhoto.style.transition = 'none';
@@ -1580,7 +1863,7 @@ function slideViewingPhoto(dir) {
   });
 
   updateViewerArrows();
-  const newShiftOpacity = photoHasText(viewingIdx) ? '1' : '0';
+  const newShiftOpacity = photoHasText(num - 1) ? '1' : '0';
   if ($shiftRead.style.opacity !== newShiftOpacity) {
     $shiftRead.style.opacity = newShiftOpacity;
   }
@@ -1623,8 +1906,15 @@ function showMessage(boxes) {
 
   // In browsing mode, slide book up a bit
   if (messageReturnTo === 'browsing') {
+    animating = true;                                   // suspend cursor bob during slide
     $book.style.transition = 'transform 0.3s cubic-bezier(0.33,1,0.68,1)';
     $book.style.transform = 'translateY(-55px)';
+    // Hand cursor: turn gray (instant) and slide straight up with the book.
+    // Don't reset marginLeft — it freezes wherever the bob was (no snap/teleport).
+    $cursor.classList.add('inactive');
+    $cursor.style.transition = 'transform 0.3s cubic-bezier(0.33,1,0.68,1)';
+    $cursor.style.transform = 'translateY(-55px)';
+    setTimeout(() => { animating = false; }, 300);      // resume bob only after slide done
     $legend.style.opacity = '0';
     $legend.style.transform = 'translateY(-40px)';
     $pageTurnL.style.opacity = '0';
@@ -1648,6 +1938,20 @@ function typewriteLine() {
 
   msgTyping = true;
   document.getElementById('message-continue').style.opacity = '0';
+
+  // Skip mode: once user skipped, show lines instantly (no typewriter)
+  if (msgSkipMode) {
+    const prefix = isInline && msgPrevLines ? ' ' : '';
+    const fullLine = msgPrevLines + prefix + text.replace(/\n/g, '<br>');
+    $msgText.innerHTML = fullLine;
+    msgPrevLines = fullLine;
+    const nextEntry = msgLineIdx + 1 < box.length ? box[msgLineIdx + 1] : null;
+    if (nextEntry && !nextEntry.inline) msgPrevLines += '<br>';
+    msgTyping = false;
+    document.getElementById('message-continue').style.opacity = '1';
+    playTextBlip(); // single blip per line for feedback
+    return;
+  }
 
   // Pre-split into chunks
   const chunks = [];
@@ -1708,6 +2012,8 @@ function typewriteLine() {
 
 function advanceMessage() {
   if (msgTyping) {
+    // First skip in this message turns on skip mode — rest types instantly
+    msgSkipMode = true;
     // Skip typewriter, show full text immediately
     cancelAnimationFrame(msgTypingTimer);
     const box = msgBoxes[msgBoxIdx];
@@ -1742,6 +2048,7 @@ function advanceMessage() {
       document.getElementById('message-continue').style.opacity = '0';
       msgLineIdx = 0;
       msgPrevLines = '';
+      msgSkipMode = false; // reset skip mode for new dialog box
       // Date label stays visible
       typewriteLine();
     } else {
@@ -1754,6 +2061,7 @@ function advanceMessage() {
 function closeMessage() {
   cancelAnimationFrame(msgTypingTimer);
   msgTyping = false;
+  msgSkipMode = false; // reset skip mode for next message
 
   // Clear text first, then play close animation
   $msgText.innerHTML = '';
@@ -1780,8 +2088,17 @@ function closeMessage() {
     $dateCleanup.style.minHeight = '';
 
     if (messageReturnTo === 'browsing') {
+      animating = true;                  // suspend bobbing until slide fully completes
       $book.style.transition = 'transform 0.3s cubic-bezier(0.33,1,0.68,1)';
       $book.style.transform = 'translateY(0)';
+      // Cursor: stay gray while sliding back down, only become red after arriving.
+      // Don't reset marginLeft — preserve the frozen position.
+      $cursor.style.transition = 'transform 0.3s cubic-bezier(0.33,1,0.68,1)';
+      $cursor.style.transform = 'translateY(0)';
+      setTimeout(() => {
+        $cursor.classList.remove('inactive');
+        animating = false;               // resume bob
+      }, 300);
       $legend.style.opacity = '1';
       $legend.style.transform = 'translateY(0)';
       updateLegend();
@@ -1866,12 +2183,10 @@ document.addEventListener('keydown', (e) => {
 
   // ── MESSAGE ──
   if (state === 'message') {
+    // Game-accurate: can't cancel out of a message, must read through it
     if (key === ' ' || key === 'Enter' || key === 'z' || key === 'Z') {
       e.preventDefault();
       advanceMessage();
-    } else if (key === 'Escape' || key === 'x' || key === 'X') {
-      e.preventDefault();
-      closeMessage();
     }
     return;
   }
@@ -1885,7 +2200,8 @@ document.addEventListener('keydown', (e) => {
     } else if (key === 'd' || key === 'D' || key === 'ArrowRight') {
       slideViewingPhoto(1);
     } else if (key === 'Shift') {
-      if (photoHasText(viewingIdx)) showMessage(album.texts[viewingIdx]);
+      const vnum = photoNumAtIdx(viewingIdx);
+      if (vnum && photoHasText(vnum - 1)) showMessage(album.texts[vnum - 1]);
     }
     return;
   }
@@ -1904,8 +2220,7 @@ document.addEventListener('keydown', (e) => {
       // Left middle (1) → left top (0)
       // Left top/bottom (0,2) → turn page left, keep position
       if (cursorIdx >= 3) {
-        const target = cursorIdx - 3;
-        if (slotHasPhoto(target)) { cursorIdx = target; updateCursor(); }
+        cursorIdx = cursorIdx - 3; updateCursor();
       } else if (cursorIdx === 1) {
         cursorIdx = 0; updateCursor();
       } else if (cursorIdx === 0 || cursorIdx === 2) {
@@ -1917,9 +2232,14 @@ document.addEventListener('keydown', (e) => {
       // Right middle (4) → turn page right, keep position
       if (cursorIdx < 3) {
         const target = cursorIdx + 3;
-        if (slotHasPhoto(target)) { cursorIdx = target; updateCursor(); }
+        // Block right-nav onto the easter egg slot (DW PROLOGUE page 2, slot 5)
+        if (isDW12Hidden() && page === 1 && target === 5) {
+          // stay put — the slot is "not there" in the original game
+        } else {
+          cursorIdx = target; updateCursor();
+        }
       } else if (cursorIdx === 3 || cursorIdx === 5) {
-        if (slotHasPhoto(4)) { cursorIdx = 4; updateCursor(); }
+        cursorIdx = 4; updateCursor();
       } else if (cursorIdx === 4) {
         turnPage(1);
       }
@@ -1932,9 +2252,8 @@ document.addEventListener('keydown', (e) => {
       e.preventDefault();
       startViewing();
     } else if (key === 'Shift') {
-      const globalIdx = page * 6 + cursorIdx;
-      const globalIdx2 = page * 6 + cursorIdx;
-      if (photoHasText(globalIdx2)) showMessage(album.texts[globalIdx2]);
+      const bnum = photoNumAtIdx(page * 6 + cursorIdx);
+      if (bnum && photoHasText(bnum - 1)) showMessage(album.texts[bnum - 1]);
     } else if (key === 'Escape' || key === 'x' || key === 'X') {
       goBackToSelect();
     }
