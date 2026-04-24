@@ -49,6 +49,8 @@
     transform-origin: center center;
     z-index: 99;
   }
+  /* When not on select screen, let clicks pass through to the game viewport */
+  body:not(.on-select) #select-stage { pointer-events: none; }
   /* ── Album select ── */
   #album-select {
     position: absolute; inset: 0; z-index: 100;
@@ -87,6 +89,7 @@
   .album-cover-btn {
     text-align: center;
     transition: transform 0.2s;
+    cursor: pointer;
   }
   .album-cover-btn.selected { transform: scale(1.08); }
   .album-cover-btn canvas { height: 240px; width: auto; }
@@ -143,37 +146,43 @@
     position: fixed; inset: 0; z-index: 10;
     display: none; align-items: center; justify-content: center;
   }
+  /* When in album, reserve top space for the fixed legend bar so the scene centers below it */
+  body.in-album #game-viewport { top: calc(30px * var(--scale, 1)); }
   #scene {
     position: relative;
     width: 640px; height: 480px;
+    flex: none; /* prevent flexbox from shrinking the 640x480 DOM box */
     transform-origin: center center;
     overflow: visible;
   }
 
   /* ── Legend bar (top HUD) ── */
+  /* Legend bar is fixed to the viewport top (full width), scales its height/text via --scale */
   #legend-bar {
-    position: absolute; top: 0; left: -600px;
-    width: 1840px; height: 30px;
+    position: fixed; top: 0; left: 0; right: 0;
+    height: calc(30px * var(--scale, 1));
     background: #000;
-    border-bottom: 3px solid #fff;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 715px;
+    border-bottom: calc(3px * var(--scale, 1)) solid #fff;
+    display: none;
+    align-items: center; justify-content: center;
     z-index: 30;
     transition: opacity 0.3s, transform 0.3s;
   }
-  #legend-bar::after {
-    content: '';
-    position: absolute;
-    bottom: -4px; left: 0; right: 0;
-    height: 1px;
-    background: #000;
+  body.in-album #legend-bar { display: flex; }
+  #legend-bar-inner {
+    width: calc(410px * var(--scale, 1));
+    display: flex; align-items: center; justify-content: space-between;
   }
   .legend-item {
-    display: flex; align-items: center; gap: 6px;
-    color: #fff; font-size: 23px; letter-spacing: 1px;
+    display: flex; align-items: center;
+    gap: calc(6px * var(--scale, 1));
+    color: #fff;
+    font-size: calc(23px * var(--scale, 1));
+    letter-spacing: calc(1px * var(--scale, 1));
+    cursor: pointer;
   }
   .legend-icon {
-    height: 24px;
+    height: calc(24px * var(--scale, 1));
     image-rendering: pixelated;
     vertical-align: middle;
   }
@@ -197,6 +206,7 @@
   .photo-slot {
     position: absolute;
     width: 86px; height: 101px;
+    cursor: pointer;
   }
   .photo-slot img { width: 100%; height: 100%; }
   /* Slow fade-in for the just-discovered easter egg photo */
@@ -236,7 +246,9 @@
     align-items: center; justify-content: center;
     gap: 1px;
     transition: opacity 0.3s;
+    cursor: pointer;
   }
+  .page-turn-group.disabled { pointer-events: none; cursor: default; }
   /* Key icon image (24x24 from game assets) */
   .page-key-icon {
     width: 24px; height: 24px;
@@ -273,12 +285,12 @@
     top: 16px; left: 16px;
     width: 40px; height: 40px;
     display: none;
+    align-items: center; justify-content: center;
     background: rgba(0,0,0,0.6);
     border: 2px solid rgba(255,255,255,0.3);
     border-radius: 4px;
     z-index: 200;
     cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
   }
   #music-toggle:hover { background: rgba(0,0,0,0.85); border-color: rgba(255,255,255,0.6); }
   #music-toggle svg { width: 22px; height: 22px; }
@@ -348,6 +360,13 @@
     z-index: 40;
     transition: transform 0.25s ease-out, opacity 0.25s ease-out;
     will-change: transform, opacity;
+    cursor: pointer;
+  }
+  /* Extended invisible hit zone around each arrow (mobile-friendly) */
+  .viewer-arrow-box::before {
+    content: '';
+    position: absolute;
+    top: -22px; bottom: -22px; left: -22px; right: -22px;
   }
   .viewer-arrow-box.no-transition { transition: none !important; }
   #viewer-arrow-left { top: 50%; left: 80px; transform: translateY(calc(-50% - 60px)) translateX(-380px); }
@@ -361,6 +380,7 @@
     display: flex; align-items: center; gap: 8px;
     z-index: 40;
     transition: opacity 0.25s ease;
+    cursor: pointer;
   }
   #shift-read-prompt .legend-icon { height: 24px; position: relative; top: 6px; left: -3px; }
   #shift-read-prompt span {
@@ -391,7 +411,7 @@
     line-height: 29px;
     z-index: 50;
     display: none;
-    height: 110px;
+    min-height: 110px;
   }
   #message-box.has-face {
     padding-left: 126px;
@@ -523,19 +543,21 @@
   <div class="music-slash"></div>
 </div>
 
+<!-- Legend HUD bar (fixed at window top, independent of scene positioning) -->
+<div id="legend-bar">
+  <div id="legend-bar-inner">
+    <div class="legend-item" id="legend-read">
+      READ: <img class="legend-icon" src="assets/ui/kb_shift.png" alt="SHIFT">
+    </div>
+    <div class="legend-item" id="legend-view">
+      VIEW: <img class="legend-icon" src="assets/ui/kb_z.png" alt="Z">
+    </div>
+  </div>
+</div>
+
 <!-- Game Viewport -->
 <div id="game-viewport">
   <div id="scene">
-    <!-- Legend HUD bar -->
-    <div id="legend-bar">
-      <div class="legend-item" id="legend-read">
-        READ: <img class="legend-icon" src="assets/ui/kb_shift.png" alt="SHIFT">
-      </div>
-      <div class="legend-item" id="legend-view">
-        VIEW: <img class="legend-icon" src="assets/ui/kb_z.png" alt="Z">
-      </div>
-    </div>
-
     <!-- Album book -->
     <div id="album-book">
       <img id="book-bg" src="" alt="">
@@ -856,6 +878,7 @@ const $viewport = document.getElementById('game-viewport');
 const $scene = document.getElementById('scene');
 const $legend = document.getElementById('legend-bar');
 const $legendRead = document.getElementById('legend-read');
+const $legendView = document.getElementById('legend-view');
 const $book = document.getElementById('album-book');
 const $bookBg = document.getElementById('book-bg');
 const $pageOverlay = document.getElementById('page-text-overlay');
@@ -1053,12 +1076,17 @@ function startLoop() {
 //  Viewport scaling
 // ═══════════════════════════════════════════════════
 function updateScale() {
-  // Album view: letterbox (fit)
-  const scale = Math.min(
-    window.innerWidth / 640,
-    window.innerHeight / 480
-  );
+  // Album view: letterbox (fit). When in-album, the legend bar at the top
+  // reserves `30px * scale` of vertical space, so subtract it from available height.
+  // Legend height depends on scale, so iterate once: estimate, compute legend, re-solve.
+  const inAlbum = document.body.classList.contains('in-album');
+  let scale = Math.min(window.innerWidth / 640, window.innerHeight / 480);
+  if (inAlbum) {
+    const legendH = 30 * scale;
+    scale = Math.min(window.innerWidth / 640, (window.innerHeight - legendH) / 480);
+  }
   $scene.style.transform = `scale(${scale})`;
+  document.documentElement.style.setProperty('--scale', scale);
 
   // Select screen: cover (fill + crop) but capped at 1 — never grow beyond natural size
   const selectScale = Math.min(1, Math.max(
@@ -1107,6 +1135,77 @@ window.addEventListener('DOMContentLoaded', () => {
       const dir = Number(arrow.dataset.dir);
       changeAlbumStage(albumKey, dir);
     });
+  });
+
+  // Click album cover: first click selects, second click (already-selected) enters
+  document.querySelectorAll('.album-cover-btn').forEach((btn, i) => {
+    btn.addEventListener('click', (e) => {
+      if (state !== 'select' || animating) return;
+      if (selectIdx === i) {
+        openAlbum(i === 0 ? 'dreamworld' : 'faraway');
+      } else {
+        selectIdx = i;
+        updateSelectCursor();
+      }
+    });
+  });
+
+  // Page-turn arrow clicks (disabled class removes pointer-events via CSS)
+  $pageTurnL.addEventListener('click', () => {
+    if (state !== 'browsing' || animating) return;
+    turnPage(-1);
+  });
+  $pageTurnR.addEventListener('click', () => {
+    if (state !== 'browsing' || animating) return;
+    turnPage(1);
+  });
+
+  // Legend button clicks (hidden items don't receive pointer events)
+  $legendRead.addEventListener('click', () => {
+    if (state !== 'browsing' || animating) return;
+    const bnum = photoNumAtIdx(page * 6 + cursorIdx);
+    if (bnum && photoHasText(bnum - 1)) showMessage(album.texts[bnum - 1]);
+  });
+  $legendView.addEventListener('click', () => {
+    if (state !== 'browsing' || animating) return;
+    startViewing();
+  });
+
+  // Photo slot clicks: first click moves cursor, second click (already selected) opens viewer
+  $slots.addEventListener('click', (e) => {
+    if (state !== 'browsing' || animating) return;
+    const slot = e.target.closest('.photo-slot');
+    if (!slot) return;
+    const idx = Number(slot.dataset.slotIdx);
+    if (cursorIdx === idx) {
+      startViewing();
+    } else {
+      cursorIdx = idx;
+      updateCursor();
+    }
+  });
+
+  // Fullscreen viewer + message clicks (delegated on #scene)
+  $scene.addEventListener('click', (e) => {
+    // In reading mode, any click advances the message
+    if (state === 'message') {
+      advanceMessage();
+      return;
+    }
+    if (state !== 'viewing' || animating) return;
+
+    const t = e.target;
+    // Arrow clicks (extended hit area via ::before pseudo-element bubbles here)
+    if (t.closest && t.closest('#viewer-arrow-left')) { slideViewingPhoto(-1); return; }
+    if (t.closest && t.closest('#viewer-arrow-right')) { slideViewingPhoto(1); return; }
+    // Photo or SHIFT READ prompt → read (if text)
+    if (t === $viewerPhoto || (t.closest && t.closest('#shift-read-prompt'))) {
+      const vnum = photoNumAtIdx(viewingIdx);
+      if (vnum && photoHasText(vnum - 1)) showMessage(album.texts[vnum - 1]);
+      return;
+    }
+    // Background/empty → exit
+    endViewing();
   });
 });
 
@@ -1245,6 +1344,9 @@ function openAlbum(key) {
     document.getElementById('select-bg').style.display = 'none';
     document.getElementById('select-gif').style.display = 'none';
     $viewport.style.display = 'flex';
+    // Mark in-album BEFORE updateScale so it accounts for the legend bar height
+    document.body.classList.remove('on-select');
+    document.body.classList.add('in-album');
     updateScale();
 
     // Hide book until ready
@@ -1273,7 +1375,6 @@ function openAlbum(key) {
       updateCursor();
       $cursor.style.display = 'block';
       state = 'browsing';
-      document.body.classList.remove('on-select');
 
       // Wait for thumbnails + page overlay + parallax bg/fg
       const allImgs = [...$slots.querySelectorAll('img'), $pageOverlay];
@@ -1311,7 +1412,6 @@ function openAlbum(key) {
         });
       });
 
-      $legend.style.boxShadow = '0 -500px 0 500px #000';
       $legend.style.opacity = '1';
       $legend.style.transform = 'translateY(0)';
       updateLegend();
@@ -1341,6 +1441,7 @@ function renderPage() {
     const pos = SLOT_POS[i];
     const slot = document.createElement('div');
     slot.className = 'photo-slot';
+    slot.dataset.slotIdx = i;
     // Fade-in animation for the just-revealed easter egg thumbnail
     if (justDiscoveredEgg && album === ALBUMS.dreamworld && stageIdx.dreamworld === 0 && page === 1 && i === 5) {
       slot.classList.add('fade-in-egg');
@@ -1391,7 +1492,9 @@ function updateLegend() {
   if (state === 'browsing') {
     const num = photoNumAtIdx(page * 6 + cursorIdx);
     const hasText = num > 0 && photoHasText(num - 1);
+    const hasPhoto = slotHasPhoto(cursorIdx);
     $legendRead.style.visibility = hasText ? 'visible' : 'hidden';
+    $legendView.style.visibility = hasPhoto ? 'visible' : 'hidden';
 
     // Update photo info bar with date/title (first line of first segment)
     // Photo info bar disabled
@@ -1599,7 +1702,7 @@ function startViewing() {
 
   // Legend hides
   $legend.style.opacity = '0';
-  $legend.style.transform = 'translateY(-40px)';
+  $legend.style.transform = 'translateY(-100%)';
   $photoInfo.style.display = 'none';
 
   // Viewer arrows — start at final position but invisible, slide in together with photo
@@ -1611,7 +1714,9 @@ function startViewing() {
   $viewerArrowR.style.opacity = '0';
 
   // Show SHIFT READ prompt (index texts by photo number - 1)
-  $shiftRead.style.opacity = photoHasText(num - 1) ? '1' : '0';
+  const hasTextStart = photoHasText(num - 1);
+  $shiftRead.style.opacity = hasTextStart ? '1' : '0';
+  $shiftRead.style.pointerEvents = hasTextStart ? '' : 'none';
   $shiftRead.classList.toggle('has-outline', album.readOutline);
 
   // ── Debug frame-step mode ──
@@ -1806,10 +1911,12 @@ function updateViewerArrows() {
     ? 'translateY(calc(-50% - 60px)) translateX(0)'
     : 'translateY(calc(-50% - 60px)) translateX(-380px)';
   $viewerArrowL.style.opacity = hasPrev ? '1' : '0';
+  $viewerArrowL.style.pointerEvents = hasPrev ? '' : 'none';
   $viewerArrowR.style.transform = hasNext
     ? 'translateY(calc(-50% - 60px)) translateX(0)'
     : 'translateY(calc(-50% - 60px)) translateX(285px)';
   $viewerArrowR.style.opacity = hasNext ? '1' : '0';
+  $viewerArrowR.style.pointerEvents = hasNext ? '' : 'none';
 }
 
 function slideViewingPhoto(dir) {
@@ -1863,10 +1970,12 @@ function slideViewingPhoto(dir) {
   });
 
   updateViewerArrows();
-  const newShiftOpacity = photoHasText(num - 1) ? '1' : '0';
+  const hasTextNew = photoHasText(num - 1);
+  const newShiftOpacity = hasTextNew ? '1' : '0';
   if ($shiftRead.style.opacity !== newShiftOpacity) {
     $shiftRead.style.opacity = newShiftOpacity;
   }
+  $shiftRead.style.pointerEvents = hasTextNew ? '' : 'none';
 
   // Clean up old photo after animation
   setTimeout(() => {
@@ -1916,7 +2025,7 @@ function showMessage(boxes) {
     $cursor.style.transform = 'translateY(-55px)';
     setTimeout(() => { animating = false; }, 300);      // resume bob only after slide done
     $legend.style.opacity = '0';
-    $legend.style.transform = 'translateY(-40px)';
+    $legend.style.transform = 'translateY(-100%)';
     $pageTurnL.style.opacity = '0';
     $pageTurnR.style.opacity = '0';
     $photoInfo.style.display = 'none';
@@ -2125,6 +2234,8 @@ function goBackToSelect() {
     // Hidden behind black — switch everything
     state = 'select';
     document.body.classList.add('on-select');
+    document.body.classList.remove('in-album');
+    updateScale();
     album = null;
     $viewport.style.display = 'none';
     $viewer.classList.remove('active');
@@ -2138,7 +2249,6 @@ function goBackToSelect() {
     $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.png')`;
     $parallax.style.backgroundPosition = '0 0';
     // Don't clear parallax-fg — keep it loaded/cached to avoid repaint delay next time
-    $legend.style.boxShadow = '';
     // Reset book transforms
     $book.style.transform = '';
     $book.style.opacity = '1';
