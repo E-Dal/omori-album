@@ -166,7 +166,8 @@
     display: none;
     align-items: center; justify-content: center;
     z-index: 30;
-    transition: opacity 0.3s, transform 0.3s;
+    /* Game-accurate: title popup/close linear */
+    transition: opacity 0.25s linear, transform 0.25s linear;
   }
   body.in-album #legend-bar { display: flex; }
   #legend-bar-inner {
@@ -228,10 +229,10 @@
                 transform 0.3s cubic-bezier(0.33,1,0.68,1),
                 opacity 0.35s;
   }
-  /* Inactive state (e.g. while reading a description): matches OMORI's
-     setColorTone([-80,-80,-80,255]) — dimmed + fully desaturated */
+  /* Inactive state (reading a description): matches OMORI's exact
+     setColorTone([-80,-80,-80,255]) — fully desaturated then RGB subtract 80/255 */
   #hand-cursor.inactive {
-    filter: grayscale(100%) brightness(0.7);
+    filter: grayscale(100%) url(#omori-tone-dark);
   }
 
   /* ── Page turn controls (game-accurate) ── */
@@ -272,7 +273,7 @@
     z-index: 999;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.25s;
+    transition: opacity 0.5s linear;
   }
   #scene-transition.active {
     opacity: 1;
@@ -488,6 +489,18 @@
 </style>
 </head>
 <body>
+
+<!-- SVG filter: replicates MV setColorTone([-80,-80,-80,255]) RGB offset (-80/255 ≈ -0.314) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="omori-tone-dark" color-interpolation-filters="sRGB">
+    <feColorMatrix type="matrix" values="
+      1 0 0 0 -0.3137
+      0 1 0 0 -0.3137
+      0 0 1 0 -0.3137
+      0 0 0 1 0
+    "/>
+  </filter>
+</svg>
 
 <div id="scene-transition" class="active"></div>
 <div id="parallax-bg"></div>
@@ -840,7 +853,7 @@ const bgm = new Audio('assets/audio/event_maris_theme.ogg');
 bgm.loop = true;
 bgm.volume = 0.6;
 const sfxPageTurn = new Audio('assets/audio/SE_turn_page.ogg');
-sfxPageTurn.volume = 0.7;
+sfxPageTurn.volume = 0.9; // game-accurate: plays at volume 90
 // Web Audio API for low-latency text blips (game-accurate)
 // Game config: SYS_text, volume 50, pitch 100 ± 10, interval 2
 let audioCtx = null;
@@ -1423,7 +1436,7 @@ function openAlbum(key) {
     if ($bookBg.complete && $bookBg.naturalWidth > 0) {
       $bookBg.onload();
     }
-  }, 350);
+  }, 500);
 }
 
 // ═══════════════════════════════════════════════════
@@ -1613,8 +1626,9 @@ function turnPage(dir) {
     const newCanvas = captureHalfPage(newSide);
 
     let frame = 0;
-    const phase1Frames = 12;
-    const phase2Frames = 10;
+    // Game-accurate: main flip tween duration 25 frames (≈0.42s at 60fps)
+    const phase1Frames = 13;
+    const phase2Frames = 12;
 
     function animateFlip() {
       frame++;
@@ -1681,20 +1695,18 @@ function startViewing() {
   $viewerPhoto.style.transform = 'translate(-50%, calc(20% + 0px))';
   $viewerPhoto.style.opacity = isFaraway ? '0' : '1';
 
-  // Album slide down (slower: 0.8s)
-  $book.style.transition = 'transform 0.3s cubic-bezier(0.7,0,1,0.5) 0.02s, opacity 0.35s cubic-bezier(0.7,0,1,0.5) 0.02s';
+  // Album slide down — game-accurate: duration 15 frames (0.25s) linear
+  $book.style.transition = 'transform 0.25s linear, opacity 0.25s linear';
   $book.style.transform = 'translateY(500px)';
   $book.style.opacity = '0';
-  // Cursor turns gray + slides down with the book + fades out.
-  // Don't reset marginLeft — freeze wherever the bob was (no snap/teleport).
   $cursor.classList.add('inactive');
-  $cursor.style.transition = 'transform 0.3s cubic-bezier(0.7,0,1,0.5) 0.02s, opacity 0.35s cubic-bezier(0.7,0,1,0.5) 0.02s';
+  $cursor.style.transition = 'transform 0.25s linear, opacity 0.25s linear';
   $cursor.style.transform = 'translateY(500px)';
   $cursor.style.opacity = '0';
 
   // Page turn controls slide down with album
-  $pageTurnL.style.transition = 'transform 0.27s cubic-bezier(0.7,0,1,0.5) 0.02s, opacity 0.35s cubic-bezier(0.7,0,1,0.5) 0.02s';
-  $pageTurnR.style.transition = 'transform 0.27s cubic-bezier(0.7,0,1,0.5) 0.02s, opacity 0.35s cubic-bezier(0.7,0,1,0.5) 0.02s';
+  $pageTurnL.style.transition = 'transform 0.25s linear, opacity 0.25s linear';
+  $pageTurnR.style.transition = 'transform 0.25s linear, opacity 0.25s linear';
   $pageTurnL.style.transform = 'translateY(500px)';
   $pageTurnR.style.transform = 'translateY(500px)';
   $pageTurnL.style.opacity = '0';
@@ -1729,9 +1741,10 @@ function startViewing() {
   // Force layout flush so initial state is applied, then set targets with transition
   $viewerPhoto.offsetHeight;
 
+  // Game-accurate: viewer photo y+opacity tween duration 15 frames (0.25s) linear
   $viewerPhoto.style.transition = isFaraway
-    ? 'transform 0.35s cubic-bezier(0.33,1,0.68,1), opacity 0.117s'
-    : 'transform 0.35s cubic-bezier(0.33,1,0.68,1)';
+    ? 'transform 0.25s linear, opacity 0.25s linear'
+    : 'transform 0.25s linear';
   $viewerPhoto.style.transform = 'translate(-50%, -50%)';
   $viewerPhoto.style.opacity = '1';
 
@@ -1743,7 +1756,8 @@ function startViewing() {
   $viewerArrowR.style.transition = '';
   updateViewerArrows();
 
-  setTimeout(() => { animating = false; }, 450);
+  // Tween 15 + wait 5 frames = 20 frames ≈ 333ms
+  setTimeout(() => { animating = false; }, 333);
 }
 
 // ── Debug: rAF frame-by-frame stepping ──
@@ -1829,14 +1843,14 @@ function endViewing() {
     easterEgg12Discovered = true;
   }
 
-  // Photo fades out slightly downward (explicit transition so Headspace also fades)
-  $viewerPhoto.style.transition = 'transform 0.35s cubic-bezier(0.33,1,0.68,1), opacity 0.25s';
+  // Game-accurate: viewer exit tween 15 frames (0.25s) linear
+  $viewerPhoto.style.transition = 'transform 0.25s linear, opacity 0.25s linear';
   $viewerPhoto.style.transform = 'translate(-50%, -20%)';
   $viewerPhoto.style.opacity = '0';
 
-  // Viewer arrows slide out to sides (faster than entering)
-  $viewerArrowL.style.transition = 'transform 0.25s ease-in, opacity 0.25s ease-in';
-  $viewerArrowR.style.transition = 'transform 0.25s ease-in, opacity 0.25s ease-in';
+  // Viewer arrows slide out to sides
+  $viewerArrowL.style.transition = 'transform 0.25s linear, opacity 0.25s linear';
+  $viewerArrowR.style.transition = 'transform 0.25s linear, opacity 0.25s linear';
   $viewerArrowL.style.transform = 'translateY(calc(-50% - 60px)) translateX(-380px)';
   $viewerArrowR.style.transform = 'translateY(calc(-50% - 60px)) translateX(285px)';
   $shiftRead.style.opacity = '0';
@@ -1850,20 +1864,19 @@ function endViewing() {
   $pageTurnR.style.opacity = '0.6';
 
   requestAnimationFrame(() => {
-    $book.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.7s';
+    // Game-accurate: list popup tween 15 frames (0.25s) linear
+    $book.style.transition = 'transform 0.25s linear, opacity 0.25s linear';
     $book.style.transform = 'translateY(0)';
     $book.style.opacity = '1';
 
-    $pageTurnL.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.7s';
-    $pageTurnR.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.7s';
+    $pageTurnL.style.transition = 'transform 0.25s linear, opacity 0.25s linear';
+    $pageTurnR.style.transition = 'transform 0.25s linear, opacity 0.25s linear';
     $pageTurnL.style.transform = 'translateY(0)';
     $pageTurnR.style.transform = 'translateY(0)';
     $pageTurnL.style.opacity = '1';
     $pageTurnR.style.opacity = '1';
 
-    // Cursor (still gray) slides back up with book and fades in.
-    // Don't reset marginLeft — preserve frozen horizontal position.
-    $cursor.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.7s';
+    $cursor.style.transition = 'transform 0.25s linear, opacity 0.25s linear';
     $cursor.style.transform = 'translateY(0)';
     $cursor.style.opacity = '1';
   });
@@ -1894,7 +1907,7 @@ function endViewing() {
       renderPage();
       setTimeout(() => { justDiscoveredEgg = false; }, 3000);
     }
-  }, 450);
+  }, 250);
 }
 
 function updateViewerArrows() {
@@ -1940,8 +1953,8 @@ function slideViewingPhoto(dir) {
   oldImg.style.top = '50%';
   oldImg.style.zIndex = '36';
   oldImg.style.imageRendering = 'pixelated';
-  // Force override transition after cssText copy
-  oldImg.style.setProperty('transition', 'opacity 0.8s linear', 'important');
+  // Game-accurate: 15 frames (0.25s) linear
+  oldImg.style.setProperty('transition', 'opacity 0.25s linear', 'important');
   $viewer.appendChild(oldImg);
 
   // Fade out old photo
@@ -1961,10 +1974,10 @@ function slideViewingPhoto(dir) {
   $viewerPhoto.style.zIndex = '37';
   $viewerPhoto.src = newSrc;
 
-  // Start slide animation on next frame
+  // Start slide animation on next frame (game-accurate: 0.25s linear)
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      $viewerPhoto.style.transition = 'transform 0.4s cubic-bezier(0.33,1,0.68,1)';
+      $viewerPhoto.style.transition = 'transform 0.25s linear';
       $viewerPhoto.style.transform = 'translate(-50%, -50%)';
     });
   });
@@ -1977,11 +1990,11 @@ function slideViewingPhoto(dir) {
   }
   $shiftRead.style.pointerEvents = hasTextNew ? '' : 'none';
 
-  // Clean up old photo after animation
+  // Clean up old photo after animation (15 frames + wait ≈ 300ms)
   setTimeout(() => {
     oldImg.remove();
     animating = false;
-  }, 450);
+  }, 300);
 }
 
 // ═══════════════════════════════════════════════════
@@ -2078,7 +2091,7 @@ function typewriteLine() {
 
   let chunkIdx = 0;
   let blipCounter = 0;
-  const charsPerFrame = 2;
+  const charsPerFrame = 1; // game-accurate: MV default 1 char/frame (60 chars/sec)
   const prefix = msgPrevLines;
   const fullHtml = chunks.join('');
 
@@ -2255,12 +2268,12 @@ function goBackToSelect() {
     $pageTurnL.style.transform = '';
     $pageTurnR.style.transform = '';
 
-    // Fade back in
+    // Fade back in (game-accurate: after wait 40 frames ≈ 667ms, but we cut to 100ms)
     setTimeout(() => {
       $trans.classList.remove('active');
       animating = false;
-    }, 50);
-  }, 280);
+    }, 100);
+  }, 500);
 }
 
 // ═══════════════════════════════════════════════════
