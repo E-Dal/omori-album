@@ -23,6 +23,9 @@
 
   /* ── Pixel-art rendering ── */
   img, canvas { image-rendering: pixelated; }
+  /* Photos contain hand-drawn detail, not crisp pixel art — pixelated at fractional
+     scene scale produces ugly blocky/uneven artifacts. Use bilinear smoothing instead. */
+  #viewer-photo, .photo-slot img { image-rendering: auto; }
 
   /* ── Parallax ── */
   #parallax-bg {
@@ -66,6 +69,12 @@
     filter: blur(3px) brightness(0.6);
     transform: scale(1.02);
     transition: opacity 0.3s;
+  }
+  /* BlackSpace cover: tile the parallax sky and animate it via JS (drift toward
+     the lower-left, matching Scene_OmoriTitleScreen.update in the original game). */
+  body.on-select-bs #select-bg {
+    background-size: auto;
+    background-repeat: repeat;
   }
   #select-gif {
     position: fixed; z-index: 99;
@@ -137,7 +146,7 @@
   }
   .album-cover-btn.selected .select-cursor { visibility: visible; }
   .select-hint {
-    color: #fff; font-size: 15px; letter-spacing: 1px; text-align: center; line-height: 1.5;
+    color: #fff; font-size: 18px; letter-spacing: 1px; text-align: center; line-height: 1.5;
   }
 
   /* ── Game viewport (640x480 scaled) ── */
@@ -277,12 +286,42 @@
     z-index: 999;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.5s linear;
+    transition: opacity 0.25s linear;
   }
   #scene-transition.active {
     opacity: 1;
     pointer-events: all;
   }
+
+  /* "Something" eye — bottom-left, hover to reveal, click to toggle BS visibility */
+  #something-corner {
+    position: fixed;
+    bottom: 0; left: 0;
+    width: 60px; height: 70px;
+    z-index: 200;
+    pointer-events: none; /* invisible zone; only the eye captures clicks */
+  }
+  #something-eye {
+    position: absolute;
+    bottom: 12px; left: 14px;
+    width: 9px; height: 30px;     /* ~1/3 of native 26×89 */
+    image-rendering: pixelated;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+    cursor: pointer;
+  }
+  /* Eye is always present on the select screen; only the hover state surfaces it.
+     Clicking toggles bs-locked so the user can hide/show BS at any time. */
+  body.on-select #something-corner { pointer-events: auto; }
+  body.on-select #something-corner:hover #something-eye {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  /* Locked: hide the BS cover button so DW/FA appear as the only choices */
+  body.bs-locked .album-cover-btn[data-album="blackspace"] { display: none; }
+  /* BS has no stages — hide its (empty) stage roller but keep the layout slot */
+  .album-cover-btn[data-album="blackspace"] .stage-roller { visibility: hidden; }
 
   /* ── Music toggle button ── */
   #music-toggle {
@@ -377,7 +416,7 @@
   .viewer-arrow-box.no-transition { transition: none !important; }
   /* Game: box y = (480 - 25 - 125) / 2 = 165 → visual center 62.5px above scene center */
   #viewer-arrow-left { top: 50%; left: 80px; transform: translateY(calc(-50% - 62.5px)) translateX(-380px); }
-  #viewer-arrow-right { top: 50%; left: 515px; width: 44px; transform: translateY(calc(-50% - 62.5px)) translateX(285px); }
+  #viewer-arrow-right { top: 50%; left: 515px; width: 44px; transform: translateY(calc(-50% - 62.5px)) translateX(380px); }
 
   /* SHIFT READ prompt — game bitmap y=450 (h=30), but icon sits at bitmap y=4
      with transparent padding, so visible content floats ~5px above scene bottom */
@@ -425,7 +464,7 @@
     line-height: 29px;
     z-index: 50;
     display: none;
-    min-height: 110px;
+    min-height: 111px;
   }
   #message-box.has-face {
     padding-left: 126px;
@@ -446,8 +485,9 @@
     border: 3px solid #fff;
     outline: 1px solid #000;
     color: #fff;
-    padding: 2px 12px;
-    font-size: 29px;
+    padding: 0 8px 4px 8px;
+    font-size: 28px;
+    line-height: 30px;
     white-space: nowrap;
     display: none;
     z-index: 51;
@@ -501,7 +541,7 @@
   }
 </style>
 </head>
-<body>
+<body class="bs-locked">
 
 <!-- SVG filter: replicates MV setColorTone([-80,-80,-80,255]) RGB offset (-80/255 ≈ -0.314) -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -554,8 +594,18 @@
         <div class="album-cover-label">FARAWAY TOWN</div>
         <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
       </div>
+      <div class="album-cover-btn" data-album="blackspace">
+        <div class="stage-roller" data-album="blackspace">
+          <div class="stage-arrow stage-left disabled" data-dir="-1"></div>
+          <div class="stage-current"></div>
+          <div class="stage-arrow stage-right disabled" data-dir="1"></div>
+        </div>
+        <canvas id="cover-bs" width="241" height="325"></canvas>
+        <div class="album-cover-label">BLACKSPACE</div>
+        <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
+      </div>
     </div>
-    <div class="select-hint">Arrow keys / WASD to navigate<br>Z / Enter to confirm<br>X / Esc to cancel</div>
+    <div class="select-hint">Besides clicking, you can also use Arrow keys / WASD to navigate,<br>Z / Enter to confirm, and X / Esc to cancel!</div>
   </div>
 </div>
 
@@ -567,6 +617,11 @@
     <path d="M14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
   </svg>
   <div class="music-slash"></div>
+</div>
+
+<!-- "Something" eye: hidden BS unlock. Hover the top-right corner to reveal it; click to unlock the BlackSpace album. -->
+<div id="something-corner" aria-hidden="true">
+  <img id="something-eye" src="assets/ui/Something.png" alt="">
 </div>
 
 <!-- Legend HUD bar (fixed at window top, independent of scene positioning) -->
@@ -759,10 +814,38 @@ const ALBUMS = {
       },
     ],
   },
+  blackspace: {
+    name: 'BLACKSPACE',
+    bookImage: 'assets/ui/blackspace_album.png',
+    parallax: 'assets/ui/Blackspace_polaroidBG_FA_day.png',
+    parallaxFg: 'assets/ui/Blackspace_polaroidBG_FA.png',
+    face: null, // no Basil face for BS — no description box uses face yet
+    readOutline: true,
+    selectBg: 'assets/ui/Blackspace_polaroidBG_FA_day.png', // red sky (no black overlay = differentiate from inside-album view)
+    selectGif: null,
+    pageTextPrefix: 'assets/pages/blackspace_pg',
+    thumbPrefix: 'assets/thumbnails/BS_POLAROID_',
+    fullPrefix: 'assets/fullsize/BS_A_',
+    thumbSuffix: '', fullSuffix: '',
+    selectBgm: null,         // silent on the BS cover (mari's theme fades out)
+    defaultBgm: 'bs_listening',
+    defaultBgs: 'amb_kettle',
+    maxPages: 4, totalPhotos: 24,
+    pages: [
+      [ 1, 2, 3, 4, 5, 6],
+      [ 7, 8, 9,10,11,12],
+      [13,14,15,16,17,18],
+      [19,20,21,22,23,24],
+    ],
+    texts: null,
+    // No stages defined yet — single state shows all 24 photos
+  },
 };
 
 // Current stage index per album (indexed by album key)
-const stageIdx = { dreamworld: 0, faraway: 0 };
+const stageIdx = { dreamworld: 0, faraway: 0, blackspace: 0 };
+// Map selectIdx (0..2) to album key — keep order in sync with HTML cover buttons
+const SELECT_KEYS = ['dreamworld', 'faraway', 'blackspace'];
 
 // Easter egg: the blurry group photo (DW_A_12) at slot 11 of PROLOGUE.
 // Hidden by default. Revealed by pressing right arrow while viewing photo 11.
@@ -780,6 +863,7 @@ function isDW12Hidden() {
 fetch('assets/album_segments.json?v=' + Date.now()).then(r => r.json()).then(data => {
   ALBUMS.dreamworld.texts = data.dreamworld;
   ALBUMS.faraway.texts = data.faraway;
+  ALBUMS.blackspace.texts = data.blackspace;
 });
 
 // Photo slot positions on the open book (from game code)
@@ -837,6 +921,11 @@ let state = 'select'; // select | browsing | viewing | message
 // Reflect state on body for CSS (e.g. hide parallax layers on select screen)
 window.addEventListener('DOMContentLoaded', () => {
   document.body.classList.add('on-select');
+  // Restore BS visibility preference: locked by default, unlocked if user previously toggled.
+  try {
+    const stored = localStorage.getItem('bsLocked');
+    if (stored === '0') document.body.classList.remove('bs-locked');
+  } catch (e) { /* localStorage may be disabled — keep default locked state */ }
 });
 let album = null;
 let page = 0;
@@ -848,6 +937,15 @@ let msgBoxes = [];       // current message boxes array (each box = array of lin
 let msgBoxIdx = 0;       // current box index
 let msgLineIdx = 0;      // current line index within current box
 let msgTyping = false;   // typewriter in progress
+let msgPauseActive = false; // 10-frame inter-segment wait — ignore clicks during this
+let msgHoldFast = false; // user is holding Z/X/Shift/click → fast-forward (game's _showFast)
+let msgHoldFastUnlockAt = 0; // briefly disable hold-fast after a box switch so the first
+                              // segment types visibly even if the user is still holding
+function showContinueCursor() {
+  // Cursor visible whenever waiting for input. The "flicker on skip" effect is
+  // a natural side-effect of hide-during-typing → show-when-done; no extra animation needed.
+  document.getElementById('message-continue').style.opacity = '1';
+}
 let msgSkipMode = false; // once user skips once, rest of message types instantly
 let msgTypingTimer = null;
 let msgPrevLines = '';   // accumulated previous lines in current box
@@ -859,51 +957,95 @@ let _debugAnimTickFn = null;    // 内部用，当前调试动画的 tick 函数
 
 // Cursor bob animation
 let cursorBobAngle = 0;
+// Pause bob ONLY during animations that translate the cursor (viewer enter/exit, message
+// open/close). Page-turn animations don't move the cursor, so bob should keep going.
+let cursorBobPaused = false;
 
 // ═══════════════════════════════════════════════════
 //  Audio
 // ═══════════════════════════════════════════════════
-const bgm = new Audio('assets/audio/event_maris_theme.ogg');
-bgm.loop = true;
 const BGM_VOLUME = 0.6;       // target volume when fully faded in
+const BGS_VOLUME = 0.5;       // ambient layer (slightly quieter than BGM)
 const BGM_FADE_MS = 600;      // each fade direction
-bgm.volume = BGM_VOLUME;
-let currentBgmName = 'event_maris_theme';
-let _bgmFadeRAF = null;
-function fadeBgm(toVol, durMs, onDone) {
-  if (_bgmFadeRAF) cancelAnimationFrame(_bgmFadeRAF);
-  const fromVol = bgm.volume;
-  const start = performance.now();
-  function tick() {
-    const t = Math.min(1, (performance.now() - start) / durMs);
-    bgm.volume = fromVol + (toVol - fromVol) * t;
-    if (t < 1) _bgmFadeRAF = requestAnimationFrame(tick);
-    else { _bgmFadeRAF = null; if (onDone) onDone(); }
-  }
-  tick();
-}
-function setBgm(name) {
-  // name=null → silence; otherwise crossfade to the new track
-  if (name === currentBgmName) return;
-  currentBgmName = name;
-  fadeBgm(0, BGM_FADE_MS, () => {
-    bgm.pause();
-    bgm.currentTime = 0;
-    if (!name) { bgm.removeAttribute('src'); bgm.load(); return; }
-    bgm.src = 'assets/audio/' + name + '.ogg';
-    if (musicEnabled) {
-      bgm.volume = 0;
-      bgm.play().catch(() => {});
-      fadeBgm(BGM_VOLUME, BGM_FADE_MS);
-    } else {
-      bgm.volume = BGM_VOLUME; // ready for when user enables music
-    }
-  });
-}
-// SFX via Web Audio API — zero-latency overlapping playback, no cut-off on rapid triggers.
-// Every play creates a fresh AudioBufferSourceNode; old sounds finish naturally in parallel.
-// Shared AudioContext (created now so loadSfx and text-blip loader can both use it)
+
+// Shared AudioContext for everything (BGM, BGS, SFX, text blips).
+// Web Audio gives us gapless looping (HTMLAudioElement has a seam on loop).
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+// Generic looping-audio layer with crossfade between tracks. Used for BGM + BGS.
+function makeAudioLayer(defaultVol) {
+  const cache = {};
+  let source = null;
+  let gain = null;
+  let currentName = null;
+  function ensureGain() {
+    if (gain) return;
+    gain = audioCtx.createGain();
+    gain.gain.value = 0;
+    gain.connect(audioCtx.destination);
+  }
+  function stop() {
+    if (source) {
+      try { source.stop(); } catch (e) {}
+      source.disconnect();
+      source = null;
+    }
+  }
+  function setTrack(name) {
+    // Skip only when the name is unchanged AND state already matches (playing for set, silent for null)
+    if (name === currentName && (source || !name)) return;
+    currentName = name;
+    ensureGain();
+    const fadeSec = BGM_FADE_MS / 1000;
+    const startSource = (buffer) => {
+      if (currentName !== name) return;
+      if (!musicEnabled) return; // toggleMusic re-arms when music turns on
+      stop();
+      const src = audioCtx.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true; // gapless
+      src.connect(gain);
+      src.start();
+      source = src;
+      const t = audioCtx.currentTime;
+      gain.gain.cancelScheduledValues(t);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(defaultVol, t + fadeSec);
+    };
+    const swapAndStart = () => {
+      if (currentName !== name) return;
+      stop();
+      if (!name) return;
+      if (cache[name]) startSource(cache[name]);
+      else fetch(`assets/audio/${name}.ogg`)
+        .then(r => r.arrayBuffer())
+        .then(buf => audioCtx.decodeAudioData(buf))
+        .then(buffer => { cache[name] = buffer; startSource(buffer); })
+        .catch(() => {});
+    };
+    if (source) {
+      // Crossfade: ramp current source to 0, then swap
+      const now = audioCtx.currentTime;
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(gain.gain.value, now);
+      gain.gain.linearRampToValueAtTime(0, now + fadeSec);
+      setTimeout(swapAndStart, BGM_FADE_MS);
+    } else {
+      // No active source — start immediately (no fade-out delay)
+      swapAndStart();
+    }
+  }
+  return {
+    setTrack, stop,
+    isPlaying: () => !!source,
+    getCurrent: () => currentName,
+  };
+}
+
+const bgmLayer = makeAudioLayer(BGM_VOLUME);
+const bgsLayer = makeAudioLayer(BGS_VOLUME);
+function setBgm(name) { bgmLayer.setTrack(name); }
+function setBgs(name) { bgsLayer.setTrack(name); }
 const sfxBuffers = {}; // name → AudioBuffer (populated async)
 function loadSfx(name, url) {
   fetch(url).then(r => r.arrayBuffer())
@@ -1060,14 +1202,18 @@ let musicEnabled = false;
 
 function toggleMusic() {
   const btn = document.getElementById('music-toggle');
-  if (bgm.paused) {
-    bgm.play().catch(() => {});
-    btn.classList.add('playing');
-    musicEnabled = true;
+  musicEnabled = !musicEnabled;
+  btn.classList.toggle('playing', musicEnabled);
+  if (musicEnabled) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    // Re-arm both layers if a track is set but the source was stopped on mute
+    [bgmLayer, bgsLayer].forEach(layer => {
+      const n = layer.getCurrent();
+      if (n && !layer.isPlaying()) layer.setTrack(n);
+    });
   } else {
-    bgm.pause();
-    btn.classList.remove('playing');
-    musicEnabled = false;
+    bgmLayer.stop();
+    bgsLayer.stop();
   }
 }
 
@@ -1091,10 +1237,11 @@ function drawCovers() {
   const img = new Image();
   img.onload = () => {
     const cw = 241, ch = 325;
-    // Frame 0=green(Faraway), Frame 2=purple(Headspace)
-    const frames = {'cover-dw': 1, 'cover-fa': 0};
-    ['cover-dw', 'cover-fa'].forEach((id) => {
+    // Atlas order in PhotoAlbumCovers.png: 0=Faraway, 1=Dreamworld, 2=BlackSpace
+    const frames = {'cover-fa': 0, 'cover-dw': 1, 'cover-bs': 2};
+    Object.keys(frames).forEach((id) => {
       const c = document.getElementById(id);
+      if (!c) return;
       const ctx = c.getContext('2d');
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(img, frames[id] * cw, 0, cw, ch, 0, 0, cw, ch);
@@ -1107,17 +1254,23 @@ function drawCovers() {
 //  Main Loop (parallax + cursor animation)
 // ═══════════════════════════════════════════════════
 let resetParallax = () => {}; // populated when startLoop runs
+let resetBsScroll = () => {}; // populated when startLoop runs
 function startLoop() {
   const $fg = document.getElementById('parallax-fg');
   let parallaxX = 0;
   let lastParallaxSnap = 0;
+  // BlackSpace cover scroll — drifts the select bg toward the lower-left
+  // (game's Scene_OmoriTitleScreen.update: origin.x += 0.5, origin.y -= 0.5)
+  let bsScrollX = 0, bsScrollY = 0;
+  const $selectBg = document.getElementById('select-bg');
   resetParallax = () => { parallaxX = 0; lastParallaxSnap = 0; };
+  resetBsScroll = () => { bsScrollX = 0; bsScrollY = 0; $selectBg.style.backgroundPosition = ''; };
 
   function tick() {
 
-    // Parallax scroll (only inside album, not on select screen)
-    // Game: origin.x += 0.1 per frame (item.meta.ParallaxSpeedX), smooth 1px snap
-    if (state !== 'select') {
+    // Parallax scroll inside an album. BlackSpace stays static for visual
+    // contrast against its drifting cover bg on the select screen.
+    if (state !== 'select' && album !== ALBUMS.blackspace) {
       parallaxX -= 0.1;
       const snapped = Math.round(parallaxX);
       if (snapped !== lastParallaxSnap) {
@@ -1126,26 +1279,37 @@ function startLoop() {
       }
     }
 
-    // Cursor bob (sine wave on anchor, like game)
-    cursorBobAngle = (cursorBobAngle + 0.7) % 20;
-    if (state === 'browsing' && !animating) {
-      const bobX = Math.sin(cursorBobAngle * (Math.PI / 10)) * 2;
+    // BS select cover drift — keyed off the *currently-displayed* bg image so the
+    // scrolling keeps going during the fade-to-black, only stopping the moment
+    // updateSelectCursor swaps to the new bg behind the fully-black overlay.
+    if (state === 'select' && currentSelectBg === ALBUMS.blackspace.selectBg) {
+      bsScrollX -= 0.5;
+      bsScrollY += 0.5;
+      $selectBg.style.backgroundPosition = `${Math.round(bsScrollX)}px ${Math.round(bsScrollY)}px`;
+    }
+
+    // Cursor bob — game-accurate (Sprite_WindowCustomCursor, Omori BASE.js L4171):
+    // duration 20, speed 0.5, amplitude 0.1 × cursor_width (29px) ≈ 2.9px;
+    // full sine cycle = 40 frames (~0.67s).
+    cursorBobAngle = (cursorBobAngle + 0.5) % 20;
+    if (state === 'browsing' && !cursorBobPaused) {
+      const bobX = Math.sin(cursorBobAngle * (Math.PI / 10)) * 2.9;
       $cursor.style.marginLeft = (bobX + 8) + 'px';
     }
 
-    // Select screen cursor bob (vertical, current position = highest point)
+    // Select screen cursor bob — same sine, amp 2.9 (cursor width 29 × 0.1)
     if (state === 'select') {
-      const bobY = Math.sin(cursorBobAngle * (Math.PI / 10)) * 2;
+      const bobY = Math.sin(cursorBobAngle * (Math.PI / 10)) * 2.9;
       document.querySelectorAll('.select-cursor').forEach(c => {
         c.style.transform = `rotate(-90deg) translateX(${-bobY}px)`;
       });
     }
 
-    // Message hand bob (slightly slower)
+    // Message continue cursor bob (same as game)
     if (state === 'message') {
       const msgHand = document.getElementById('message-continue');
       if (msgHand && msgHand.style.opacity !== '0') {
-        const msgBob = Math.sin(cursorBobAngle * (Math.PI / 10)) * 2;
+        const msgBob = Math.sin(cursorBobAngle * (Math.PI / 10)) * 2.9;
         msgHand.style.marginRight = msgBob + 'px';
       }
     }
@@ -1185,6 +1349,10 @@ updateScale();
 //  Album Select
 // ═══════════════════════════════════════════════════
 let currentSelectBg = '';
+// Highest selectable index — capped to DW/FA when BS is locked
+function maxSelectIdx() {
+  return document.body.classList.contains('bs-locked') ? 1 : SELECT_KEYS.length - 1;
+}
 
 // Update both stage rollers (current label + grey out arrows at edges)
 function updateStageRollers() {
@@ -1230,7 +1398,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (state !== 'select' || animating) return;
       if (selectIdx === i) {
         playSelectSfx();
-        openAlbum(i === 0 ? 'dreamworld' : 'faraway');
+        openAlbum(SELECT_KEYS[i]);
       } else {
         selectIdx = i;
         updateSelectCursor();
@@ -1238,6 +1406,21 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  // "Something" eye click → toggle BlackSpace album visibility (persisted via localStorage)
+  const $somethingEye = document.getElementById('something-eye');
+  if ($somethingEye) {
+    $somethingEye.addEventListener('click', () => {
+      const wasLocked = document.body.classList.toggle('bs-locked'); // returns final state
+      try { localStorage.setItem('bsLocked', wasLocked ? '1' : '0'); } catch (e) {}
+      // If we just hid BS while it was selected, clamp the select cursor back
+      if (wasLocked && selectIdx > maxSelectIdx()) {
+        selectIdx = maxSelectIdx();
+        updateSelectCursor();
+      }
+      playSelectSfx();
+    });
+  }
 
   // Page-turn arrow clicks (disabled class removes pointer-events via CSS)
   $pageTurnL.addEventListener('click', () => {
@@ -1282,9 +1465,16 @@ window.addEventListener('DOMContentLoaded', () => {
       advanceMessage();
       return;
     }
+    const t = e.target;
+    if (state === 'browsing' && !animating) {
+      // Click on empty background (not on book / page-turn) → return to select screen
+      if (!(t.closest && (t.closest('#album-book') || t.closest('.page-turn-group')))) {
+        goBackToSelect();
+      }
+      return;
+    }
     if (state !== 'viewing' || animating) return;
 
-    const t = e.target;
     // Arrow clicks (extended hit area via ::before pseudo-element bubbles here)
     if (t.closest && t.closest('#viewer-arrow-left')) { slideViewingPhoto(-1); return; }
     if (t.closest && t.closest('#viewer-arrow-right')) { slideViewingPhoto(1); return; }
@@ -1304,25 +1494,36 @@ function updateSelectCursor() {
   btns.forEach((b, i) => b.classList.toggle('selected', i === selectIdx));
 
   // Switch select screen background
-  const selectedAlbum = selectIdx === 0 ? ALBUMS.dreamworld : ALBUMS.faraway;
+  const selectedAlbum = ALBUMS[SELECT_KEYS[selectIdx]];
+  // BGM on cover: selectBgm overrides global default (BS uses null = silence)
+  setBgm('selectBgm' in selectedAlbum ? selectedAlbum.selectBgm : 'event_maris_theme');
+  // No BGS on the select screen
+  setBgs(null);
   const newBg = selectedAlbum.selectBg;
+  const isBs = SELECT_KEYS[selectIdx] === 'blackspace';
 
   if (newBg !== currentSelectBg) {
     const $sbg = document.getElementById('select-bg');
     const $sgif = document.getElementById('select-gif');
     const $sfade = document.getElementById('select-bg-fade');
 
+    const setGif = (src) => {
+      if (src) { $sgif.src = src; $sgif.style.display = ''; }
+      else { $sgif.removeAttribute('src'); $sgif.style.display = 'none'; }
+    };
     if (!currentSelectBg) {
       // First time — no transition
       $sbg.style.backgroundImage = `url('${newBg}')`;
-      $sgif.src = selectedAlbum.selectGif;
+      setGif(selectedAlbum.selectGif);
       currentSelectBg = newBg;
+      document.body.classList.toggle('on-select-bs', isBs);
     } else {
       // Preload new GIF + bg in parallel with the fade-to-black
       const newGif = selectedAlbum.selectGif;
-      const gifPreload = new Image();
       const bgPreload = new Image();
-      const gifReady = new Promise(r => { gifPreload.onload = r; gifPreload.onerror = r; gifPreload.src = newGif; if (gifPreload.complete) r(); });
+      const gifReady = newGif
+        ? new Promise(r => { const p = new Image(); p.onload = r; p.onerror = r; p.src = newGif; if (p.complete) r(); })
+        : Promise.resolve();
       const bgReady = new Promise(r => { bgPreload.onload = r; bgPreload.onerror = r; bgPreload.src = newBg; if (bgPreload.complete) r(); });
 
       // Fade to black
@@ -1330,10 +1531,14 @@ function updateSelectCursor() {
       const fadeDone = new Promise(r => setTimeout(r, 250));
 
       Promise.all([gifReady, bgReady, fadeDone]).then(() => {
-        // Everything loaded AND fade is fully black: swap under cover
+        // Everything loaded AND fade is fully black: swap under cover.
+        // Toggle the BS-tile class here too so the bg-size mode change is hidden by the fade.
         $sbg.style.backgroundImage = `url('${newBg}')`;
-        $sgif.src = newGif;
+        setGif(newGif);
         currentSelectBg = newBg;
+        document.body.classList.toggle('on-select-bs', isBs);
+        // If we're switching AWAY from BS, drop the lingering scroll position now (still hidden by fade)
+        if (!isBs) resetBsScroll();
         // Give browser a frame to paint the new content before lifting the fade
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
@@ -1375,10 +1580,10 @@ function nextVisibleIdx(from, dir) {
   return -1;
 }
 
-// Apply the given stage's data onto the album object (overriding pages/maxPages/prefixes)
+// Apply the given stage's data onto the album object (overriding pages/maxPages/prefixes).
+// Albums without stageData (e.g. blackspace) still get BGM/BGS resolution.
 function applyStage(albumObj, stageNum) {
-  const sd = (albumObj.stageData || [])[stageNum];
-  if (!sd) return;
+  const sd = (albumObj.stageData || [])[stageNum] || {};
   // Restore original defaults first (in case prior stage overrode them)
   if (!albumObj._baseline) {
     albumObj._baseline = {
@@ -1395,9 +1600,9 @@ function applyStage(albumObj, stageNum) {
   albumObj.maxPages    = sd.maxPages    ?? albumObj.maxPages;
   albumObj.totalPhotos = sd.totalPhotos ?? albumObj.totalPhotos;
   if (sd.pages) albumObj.pages = sd.pages;
-  // BGM: stage override > album default > global default
-  if ('bgm' in sd) setBgm(sd.bgm);
-  else setBgm(albumObj.defaultBgm ?? 'event_maris_theme');
+  // BGM/BGS: stage override > album default > global default
+  setBgm('bgm' in sd ? sd.bgm : (albumObj.defaultBgm ?? 'event_maris_theme'));
+  setBgs('bgs' in sd ? sd.bgs : (albumObj.defaultBgs ?? null));
 }
 
 function openAlbum(key) {
@@ -1516,7 +1721,7 @@ function openAlbum(key) {
     if ($bookBg.complete && $bookBg.naturalWidth > 0) {
       $bookBg.onload();
     }
-  }, 500);
+  }, 280); // a hair longer than the 0.25s fade-out so the swap happens fully behind black
 }
 
 // ═══════════════════════════════════════════════════
@@ -1706,9 +1911,9 @@ function turnPage(dir) {
     const newCanvas = captureHalfPage(newSide);
 
     let frame = 0;
-    // Game: phase1 scaleX 1→0 duration 20 frames easeOutCirc, phase2 0→1 duration 15 frames easeOutCirc
-    const phase1Frames = 20;
-    const phase2Frames = 15;
+    // Snappier than game's 20+15: 12+8 (0.33s total) for crisper turn feel
+    const phase1Frames = 12;
+    const phase2Frames = 8;
     // easeOutCirc formula from Omori BASE.js L5475
     const easeOutCirc = t => Math.sqrt(1 - (t - 1) * (t - 1));
 
@@ -1919,6 +2124,7 @@ function endViewing() {
   playCancelSfx();
   animating = true;
   state = 'browsing';
+  cursorBobPaused = true; // cursor slides back from translateY(500px) to 0; pause bob
 
   // Easter egg discovery: exiting from photo 12 unlocks the blurry thumbnail (session-only)
   const discoveringEgg = isDW12Hidden() && viewingIdx === 11;
@@ -1932,11 +2138,15 @@ function endViewing() {
   $viewerPhoto.style.transform = 'translate(-50%, 240px)';
   $viewerPhoto.style.opacity = '0';
 
-  // Game: arrows exit 15 frames (0.25s), easeOutCirc (not In — the game uses Out for arrow exit)
+  // Game: arrows exit 15 frames (0.25s), easeOutCirc. Also fade to 0 — without
+  // this they linger at full opacity off-screen until viewer.display:none and
+  // pop-disappear on smaller viewports where the slide doesn't fully clear.
   $viewerArrowL.style.transition = 'transform 0.25s var(--ease-out-circ), opacity 0.25s var(--ease-out-circ)';
   $viewerArrowR.style.transition = 'transform 0.25s var(--ease-out-circ), opacity 0.25s var(--ease-out-circ)';
   $viewerArrowL.style.transform = 'translateY(calc(-50% - 62.5px)) translateX(-380px)';
-  $viewerArrowR.style.transform = 'translateY(calc(-50% - 62.5px)) translateX(285px)';
+  $viewerArrowR.style.transform = 'translateY(calc(-50% - 62.5px)) translateX(380px)';
+  $viewerArrowL.style.opacity = '0';
+  $viewerArrowR.style.opacity = '0';
   // Game: SHIFT READ hide 10 frames (0.17s) easeInCirc
   $shiftRead.style.transition = 'opacity 0.17s var(--ease-in-circ)';
   $shiftRead.style.opacity = '0';
@@ -1987,6 +2197,7 @@ function endViewing() {
     // Cursor fully back: drop gray tint, resume bobbing
     $cursor.classList.remove('inactive');
     animating = false;
+    cursorBobPaused = false;
     // Trigger fade-in rerender of the unlocked easter egg thumbnail
     if (discoveringEgg) {
       justDiscoveredEgg = true;
@@ -2013,7 +2224,7 @@ function updateViewerArrows() {
   $viewerArrowL.style.pointerEvents = hasPrev ? '' : 'none';
   $viewerArrowR.style.transform = hasNext
     ? 'translateY(calc(-50% - 62.5px)) translateX(0)'
-    : 'translateY(calc(-50% - 62.5px)) translateX(285px)';
+    : 'translateY(calc(-50% - 62.5px)) translateX(380px)';
   $viewerArrowR.style.opacity = hasNext ? '1' : '0';
   $viewerArrowR.style.pointerEvents = hasNext ? '' : 'none';
 }
@@ -2093,6 +2304,7 @@ function showMessage(boxes) {
   msgBoxIdx = 0;
   msgLineIdx = 0;
   msgPrevLines = '';
+  msgPauseActive = false;
 
   $msgText.innerHTML = '';
   document.getElementById('message-continue').style.opacity = '0';
@@ -2156,7 +2368,7 @@ function typewriteLine() {
     const nextEntry = msgLineIdx + 1 < box.length ? box[msgLineIdx + 1] : null;
     if (nextEntry && !nextEntry.inline) msgPrevLines += '<br>';
     msgTyping = false;
-    document.getElementById('message-continue').style.opacity = '1';
+    showContinueCursor();
     playTextBlip(); // single blip per line for feedback
     return;
   }
@@ -2177,13 +2389,16 @@ function typewriteLine() {
 
   let chunkIdx = 0;
   let blipCounter = 0;
-  const charsPerFrame = 1; // game-accurate: MV default 1 char/frame (60 chars/sec)
+  const charsPerFrame = 1.8; // 1.8× MV default (~108 chars/sec)
   const prefix = msgPrevLines;
   const fullHtml = chunks.join('');
 
   cancelAnimationFrame(msgTypingTimer);
   function typeFrame() {
-    chunkIdx += charsPerFrame;
+    // Game-accurate fast-forward: while user holds confirm/cancel/shift/click,
+    // _showFast triggers and the rest of the line types instantly that frame.
+    if (msgHoldFast) chunkIdx = chunks.length;
+    else chunkIdx += charsPerFrame;
     if (chunkIdx > chunks.length) chunkIdx = chunks.length;
     // Show visible part + invisible remainder (preserves word-wrap positions)
     const visible = chunks.slice(0, chunkIdx).join('');
@@ -2210,7 +2425,7 @@ function typewriteLine() {
       if (nextEntry && !nextEntry.inline) {
         msgPrevLines += '<br>';
       }
-      document.getElementById('message-continue').style.opacity = '1';
+      showContinueCursor();
     } else {
       msgTypingTimer = requestAnimationFrame(typeFrame);
     }
@@ -2219,6 +2434,10 @@ function typewriteLine() {
 }
 
 function advanceMessage() {
+  // Inside the inter-segment pause: input is dropped (matches game's _waitCount window)
+  if (msgPauseActive) return;
+  // No artificial flicker animation: the natural hide-during-typing /
+  // show-when-done toggle gives the "flicker" feel for free.
   if (msgTyping) {
     // First skip in this message turns on skip mode — rest types instantly
     msgSkipMode = true;
@@ -2237,31 +2456,42 @@ function advanceMessage() {
       msgPrevLines += '<br>';
     }
     msgTyping = false;
-    document.getElementById('message-continue').style.opacity = '1';
+    showContinueCursor();
     return;
   }
 
+  // Game-accurate: \! triggers startWait(10) = 10 frames @ 60fps = 167ms exactly.
+  const SEGMENT_PAUSE = 167;
+  // Hide the continue cursor immediately to give visual feedback that the click registered
+  document.getElementById('message-continue').style.opacity = '0';
   msgLineIdx++;
   const box = msgBoxes[msgBoxIdx];
 
+  const startNext = () => { msgPauseActive = false; typewriteLine(); };
   if (msgLineIdx < box.length) {
-    // Next line in same box (append below)
-    typewriteLine();
+    msgPauseActive = true;
+    setTimeout(startNext, SEGMENT_PAUSE);
   } else {
     // Move to next box
     msgBoxIdx++;
     if (msgBoxIdx < msgBoxes.length) {
-      // Clear text and continue in same box (no close/open animation)
-      $msgText.innerHTML = '';
-      document.getElementById('message-continue').style.opacity = '0';
-      msgLineIdx = 0;
-      msgPrevLines = '';
-      msgSkipMode = false; // reset skip mode for new dialog box
-      // Date label stays visible
-      typewriteLine();
+      msgPauseActive = true;
+      setTimeout(() => {
+        $msgText.innerHTML = '';
+        msgLineIdx = 0;
+        msgPrevLines = '';
+        msgSkipMode = false; // reset skip mode for new dialog box
+        // Game-accurate: clearFlags resets _showFast on newPage, then isRepeated
+        // re-fires every keyRepeatInterval (6 frames = 100ms) during a hold.
+        msgHoldFast = false;
+        msgHoldFastUnlockAt = performance.now() + 100;
+        msgPauseActive = false;
+        typewriteLine();
+      }, SEGMENT_PAUSE);
     } else {
-      // All done
-      closeMessage();
+      // All done — same pause feel before the close animation
+      msgPauseActive = true;
+      setTimeout(() => { msgPauseActive = false; closeMessage(); }, SEGMENT_PAUSE);
     }
   }
 }
@@ -2270,6 +2500,7 @@ function closeMessage() {
   cancelAnimationFrame(msgTypingTimer);
   msgTyping = false;
   msgSkipMode = false; // reset skip mode for next message
+  msgPauseActive = false;
 
   // Clear text first, then play close animation
   $msgText.innerHTML = '';
@@ -2297,6 +2528,7 @@ function closeMessage() {
 
     if (messageReturnTo === 'browsing') {
       animating = true;                  // suspend bobbing until slide fully completes
+      cursorBobPaused = true;            // cursor sliding from translateY(-55) to 0
       $book.style.transition = 'transform 0.3s cubic-bezier(0.33,1,0.68,1)';
       $book.style.transform = 'translateY(0)';
       // Cursor: stay gray while sliding back down, only become red after arriving.
@@ -2306,6 +2538,7 @@ function closeMessage() {
       setTimeout(() => {
         $cursor.classList.remove('inactive');
         animating = false;               // resume bob
+        cursorBobPaused = false;
       }, 300);
       $legend.style.opacity = '1';
       $legend.style.transform = 'translateY(0)';
@@ -2326,8 +2559,11 @@ function goBackToSelect() {
   playCancelSfx();
   animating = true;
 
-  // Restore default BGM (crossfades during the visual fade-to-black)
-  setBgm('event_maris_theme');
+  // Restore the select-screen BGM for whichever album we're returning to
+  // (BS cover stays silent; DW/FA cover plays event_maris_theme).
+  const sel = ALBUMS[SELECT_KEYS[selectIdx]];
+  setBgm('selectBgm' in sel ? sel.selectBgm : 'event_maris_theme');
+  setBgs(null);
 
   // Fade to black
   const $trans = document.getElementById('scene-transition');
@@ -2358,17 +2594,45 @@ function goBackToSelect() {
     $pageTurnL.style.transform = '';
     $pageTurnR.style.transform = '';
 
-    // Fade back in (game-accurate: after wait 40 frames ≈ 667ms, but we cut to 100ms)
+    // Fade back in once we're behind the black overlay
     setTimeout(() => {
       $trans.classList.remove('active');
       animating = false;
-    }, 100);
-  }, 500);
+    }, 60);
+  }, 280);
 }
 
 // ═══════════════════════════════════════════════════
 //  Keyboard Input
 // ═══════════════════════════════════════════════════
+// Hold-to-fast-forward (game's _showFast). Fire ONLY on browser autorepeat
+// (e.repeat=true) so a quick tap to advance doesn't accidentally fast-forward
+// the next line.
+const FAST_KEYS = new Set([' ', 'Enter', 'z', 'Z', 'x', 'X', 'Shift', 'Escape']);
+document.addEventListener('keydown', (e) => {
+  if (FAST_KEYS.has(e.key) && e.repeat && performance.now() >= msgHoldFastUnlockAt) {
+    msgHoldFast = true;
+  }
+});
+document.addEventListener('keyup', (e) => {
+  if (FAST_KEYS.has(e.key)) msgHoldFast = false;
+});
+window.addEventListener('blur', () => { msgHoldFast = false; });
+// Pointer hold-to-fast-forward: only after a 400ms press (matches keyboard autorepeat threshold)
+let _pointerHoldTimer = null;
+document.getElementById('scene').addEventListener('pointerdown', () => {
+  if (state !== 'message') return;
+  _pointerHoldTimer = setTimeout(() => {
+    if (performance.now() >= msgHoldFastUnlockAt) msgHoldFast = true;
+  }, 400);
+});
+function _clearPointerHold() {
+  if (_pointerHoldTimer) { clearTimeout(_pointerHoldTimer); _pointerHoldTimer = null; }
+  msgHoldFast = false;
+}
+document.addEventListener('pointerup', _clearPointerHold);
+document.addEventListener('pointercancel', _clearPointerHold);
+
 document.addEventListener('keydown', (e) => {
   // ── Debug frame-step: press Enter to advance one frame ──
   if (typeof DEBUG_FRAME !== 'undefined' && DEBUG_FRAME && e.key === 'Enter' && _debugAnimTickFn) {
@@ -2382,13 +2646,13 @@ document.addEventListener('keydown', (e) => {
   // ── SELECT SCREEN ──
   if (state === 'select') {
     if (key === 'a' || key === 'A' || key === 'ArrowLeft') {
-      if (selectIdx !== 0) { selectIdx = 0; updateSelectCursor(); playCursorSfx(); }
+      if (selectIdx > 0) { selectIdx--; updateSelectCursor(); playCursorSfx(); }
     } else if (key === 'd' || key === 'D' || key === 'ArrowRight') {
-      if (selectIdx !== 1) { selectIdx = 1; updateSelectCursor(); playCursorSfx(); }
+      if (selectIdx < maxSelectIdx()) { selectIdx++; updateSelectCursor(); playCursorSfx(); }
     } else if (key === ' ' || key === 'Enter' || key === 'z' || key === 'Z') {
       e.preventDefault();
       playSelectSfx();
-      openAlbum(selectIdx === 0 ? 'dreamworld' : 'faraway');
+      openAlbum(SELECT_KEYS[selectIdx]);
     }
     return;
   }
