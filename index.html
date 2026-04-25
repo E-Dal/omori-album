@@ -768,17 +768,17 @@ const ALBUMS = {
       [37,38,39,40,41,42],[43,44,45,46,47,48],
     ],
     texts: null,
-    stages: ['INITIAL', 'MARI BACK', '+TREEHOUSE', 'MIXED ROUTE'],
+    stages: ['INITIAL', 'MARI BACK', '+TREEHOUSE', 'SCRIBBLED'],
     stageData: [
       // INITIAL: Mari (22 photos) + Treehouse (37) hidden as empty slots
       { maxPages: 8, totalPhotos: 48, bgm: 'theme_basil2', pages: [
-        [1, 0, 0, 4, 5, 0],
-        [0, 8, 9,10,11,12],
-        [0, 0, 0,16, 0,18],
+        [ 1, 0, 0, 4, 5, 0],
+        [ 0, 8, 9,10,11,12],
+        [ 0, 0, 0,16, 0,18],
         [19,20,21,22, 0, 0],
         [25,26,27, 0, 0, 0],
         [31,32,33,34,35, 0],
-        [0,38, 0, 0, 0, 0],
+        [ 0,38, 0, 0, 0, 0],
         [43,44, 0, 0, 0, 0],
       ]},
       // MARI BACK: All except 37 (treehouse)
@@ -795,20 +795,20 @@ const ALBUMS = {
         [25,26,27,28,29,30],[31,32,33,34,35,36],
         [37,38,39,40,41,42],[43,44,45,46,47,48],
       ]},
-      // MIXED ROUTE: same layout as INITIAL but uses scribbled variants — silent
+      // SCRIBBLED: same layout as INITIAL but uses scribbled variants — silent
       {
         maxPages: 8, totalPhotos: 48,
         fullPrefix: 'assets/fullsize/FA_AS_',
         thumbSuffix: 'S',
-        bgm: null, // game-accurate: no BGM in mixed route
+        bgm: null, // game-accurate: no BGM in scribbled
         pages: [
-          [1, 0, 0, 4, 5, 0],
-          [0, 8, 9,10,11,12],
-          [0, 0, 0,16, 0,18],
+          [ 1, 0, 0, 4, 5, 0],
+          [ 0, 8, 9,10,11,12],
+          [ 0, 0, 0,16, 0,18],
           [19,20,21,22, 0, 0],
           [25,26,27, 0, 0, 0],
           [31,32,33,34,35, 0],
-          [0,38, 0, 0, 0, 0],
+          [ 0,38, 0, 0, 0, 0],
           [43,44, 0, 0, 0, 0],
         ],
       },
@@ -1848,9 +1848,12 @@ function captureHalfPage(side) {
 }
 
 function waitForPageImages() {
-  const imgs = $slots.querySelectorAll('.photo-slot img');
-  const promises = Array.from(imgs).map(img => {
-    if (img.complete) return Promise.resolve();
+  // Include $pageOverlay so the handwriting text is loaded before captureHalfPage
+  // snapshots the new page (otherwise it'd be drawn missing the text and the
+  // text would only "appear" after the flip animation ends).
+  const imgs = [...$slots.querySelectorAll('.photo-slot img'), $pageOverlay];
+  const promises = imgs.map(img => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
     return new Promise(resolve => {
       img.onload = resolve;
       img.onerror = resolve;
@@ -2321,8 +2324,18 @@ function showMessage(boxes) {
     $date.classList.add('active');
   }
 
-  // Wait for open animation, then start typing
-  setTimeout(() => typewriteLine(), 130);
+  // Block advances during the 130ms open animation — otherwise a quick Z/Enter
+  // tap (or stale autorepeat) will increment msgLineIdx before line 0 ever types,
+  // resulting in "first sentence eaten + second sentence printed twice".
+  msgPauseActive = true;
+  setTimeout(() => {
+    // Clear stale hold-fast state so a still-held SHIFT doesn't immediately
+    // fast-forward line 0. 100ms lockout = game's Input.keyRepeatInterval.
+    msgHoldFast = false;
+    msgHoldFastUnlockAt = performance.now() + 100;
+    msgPauseActive = false;
+    typewriteLine();
+  }, 130);
 
   // In browsing mode, slide book up a bit
   if (messageReturnTo === 'browsing') {
