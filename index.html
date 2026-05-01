@@ -320,6 +320,10 @@
   }
   /* Locked: hide the BS cover button so DW/FA appear as the only choices */
   body.bs-locked .album-cover-btn[data-album="blackspace"] { display: none; }
+  /* BS-only-select: secret mode entered via the eye. Only the BS cover is visible
+     (DW + FA hidden); BGM is the BS album's bs_listening throughout this mode. */
+  body.bs-only-select .album-cover-btn[data-album="dreamworld"],
+  body.bs-only-select .album-cover-btn[data-album="faraway"] { display: none; }
   /* BS has no stages — hide its (empty) stage roller but keep the layout slot */
   .album-cover-btn[data-album="blackspace"] .stage-roller { visibility: hidden; }
 
@@ -932,11 +936,7 @@ let state = 'select'; // select | browsing | viewing | message
 // Reflect state on body for CSS (e.g. hide parallax layers on select screen)
 window.addEventListener('DOMContentLoaded', () => {
   document.body.classList.add('on-select');
-  // Restore BS visibility preference: locked by default, unlocked if user previously toggled.
-  try {
-    const stored = localStorage.getItem('bsLocked');
-    if (stored === '0') document.body.classList.remove('bs-locked');
-  } catch (e) { /* localStorage may be disabled — keep default locked state */ }
+  // BS is always locked from the regular grid; the eye toggles a separate bs-only-select mode.
 });
 let album = null;
 let page = 0;
@@ -1312,9 +1312,9 @@ function startLoop() {
 
   function tick() {
 
-    // Parallax scroll inside an album. BlackSpace stays static for visual
-    // contrast against its drifting cover bg on the select screen.
-    if (state !== 'select' && album !== ALBUMS.blackspace) {
+    // Parallax scroll inside an album. Game-accurate: all three albums use
+    // ParallaxSpeedX: 0.1, ParallaxSpeedY: 0 (per Items.json AlbumParallax meta).
+    if (state !== 'select') {
       parallaxX -= 0.1;
       const snapped = Math.round(parallaxX);
       if (snapped !== lastParallaxSnap) {
@@ -1395,7 +1395,11 @@ updateScale();
 let currentSelectBg = '';
 // Highest selectable index — capped to DW/FA when BS is locked
 function maxSelectIdx() {
+  if (document.body.classList.contains('bs-only-select')) return 2; // BS only
   return document.body.classList.contains('bs-locked') ? 1 : SELECT_KEYS.length - 1;
+}
+function minSelectIdx() {
+  return document.body.classList.contains('bs-only-select') ? 2 : 0;
 }
 
 // Update both stage rollers (current label + grey out arrows at edges)
@@ -1451,18 +1455,17 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // "Something" eye click → toggle BlackSpace album visibility (persisted via localStorage)
+  // "Something" eye click → toggle the secret BS-only-select mode (with full
+  // fade-to-black transition + bs_listening BGM, same vibe as confirming a save slot).
   const $somethingEye = document.getElementById('something-eye');
   if ($somethingEye) {
     $somethingEye.addEventListener('click', () => {
-      const wasLocked = document.body.classList.toggle('bs-locked'); // returns final state
-      try { localStorage.setItem('bsLocked', wasLocked ? '1' : '0'); } catch (e) {}
-      // If we just hid BS while it was selected, clamp the select cursor back
-      if (wasLocked && selectIdx > maxSelectIdx()) {
-        selectIdx = maxSelectIdx();
-        updateSelectCursor();
+      if (state !== 'select' || animating) return;
+      if (document.body.classList.contains('bs-only-select')) {
+        exitBsOnlyMode();
+      } else {
+        enterBsOnlyMode();
       }
-      playSelectSfx();
     });
   }
 
@@ -1550,10 +1553,13 @@ function updateSelectCursor() {
 
   // Switch select screen background
   const selectedAlbum = ALBUMS[SELECT_KEYS[selectIdx]];
-  // BGM on cover: selectBgm overrides global default (BS uses null = silence)
-  setBgm('selectBgm' in selectedAlbum ? selectedAlbum.selectBgm : 'event_maris_theme');
-  // No BGS on the select screen
-  setBgs(null);
+  // BGM on cover: selectBgm overrides global default (BS uses null = silence).
+  // In bs-only-select mode, BGM + BGS are managed externally (bs_listening + kettle) —
+  // don't touch them here, just refresh the cursor visuals.
+  if (!document.body.classList.contains('bs-only-select')) {
+    setBgm('selectBgm' in selectedAlbum ? selectedAlbum.selectBgm : 'event_maris_theme');
+    setBgs(null); // No BGS on the regular select screen
+  }
   const newBg = selectedAlbum.selectBg;
   const isBs = SELECT_KEYS[selectIdx] === 'blackspace';
 
@@ -1572,6 +1578,9 @@ function updateSelectCursor() {
       setGif(selectedAlbum.selectGif);
       currentSelectBg = newBg;
       document.body.classList.toggle('on-select-bs', isBs);
+      // If we're swapping away from BS via the instant path (e.g. exitBsOnlyMode resets
+      // currentSelectBg=''), clear the lingering BS scroll offset on #select-bg.
+      if (!isBs) resetBsScroll();
     } else {
       // Preload new GIF + bg in parallel with the fade-to-black
       const newGif = selectedAlbum.selectGif;
@@ -2670,9 +2679,15 @@ function goBackToSelect() {
 
   // Restore the select-screen BGM for whichever album we're returning to
   // (BS cover stays silent; DW/FA cover plays event_maris_theme).
+  // In bs-only-select mode, BGM + BGS stay as the BS album layers (continuous from the album).
   const sel = ALBUMS[SELECT_KEYS[selectIdx]];
-  setBgm('selectBgm' in sel ? sel.selectBgm : 'event_maris_theme');
-  setBgs(null);
+  if (document.body.classList.contains('bs-only-select')) {
+    setBgm('bs_listening');
+    setBgs(ALBUMS.blackspace.defaultBgs ?? null);
+  } else {
+    setBgm('selectBgm' in sel ? sel.selectBgm : 'event_maris_theme');
+    setBgs(null);
+  }
 
   // Fade to black
   const $trans = document.getElementById('scene-transition');
@@ -2704,6 +2719,67 @@ function goBackToSelect() {
     $pageTurnR.style.transform = '';
 
     // Fade back in once we're behind the black overlay
+    setTimeout(() => {
+      $trans.classList.remove('active');
+      animating = false;
+    }, 60);
+  }, 280);
+}
+
+// ═══════════════════════════════════════════════════
+//  Secret BS-only-select mode (lower-left eye)
+//  Same fade-to-black scaffolding as openAlbum / goBackToSelect; BGM crossfades
+//  to bs_listening so the cover screen feels continuous with the album itself.
+// ═══════════════════════════════════════════════════
+let _bsOnlyReturnIdx = 0; // remembers which non-BS cover (DW=0 / FA=1) to restore on exit
+function enterBsOnlyMode() {
+  if (animating) return;
+  animating = true;
+  playSelectSfx();
+  // Stash the cover the user was on so exitBsOnlyMode can restore it.
+  _bsOnlyReturnIdx = selectIdx;
+  // BS album's defaultBgm + defaultBgs — same audio layers as inside the album,
+  // so the cover screen feels continuous with the album itself (bs_listening + kettle hiss).
+  setBgm('bs_listening');
+  setBgs(ALBUMS.blackspace.defaultBgs ?? null);
+
+  const $trans = document.getElementById('scene-transition');
+  $trans.classList.add('active');
+
+  setTimeout(() => {
+    document.body.classList.remove('bs-locked');
+    document.body.classList.add('bs-only-select');
+    selectIdx = 2; // BS index in SELECT_KEYS
+    // Force instant bg swap inside updateSelectCursor (we're behind a fully-black overlay,
+    // so the inner select-bg-fade isn't needed — and would conflict with the outer fade).
+    currentSelectBg = '';
+    updateSelectCursor();
+
+    setTimeout(() => {
+      $trans.classList.remove('active');
+      animating = false;
+    }, 60);
+  }, 280);
+}
+
+function exitBsOnlyMode() {
+  if (animating) return;
+  animating = true;
+  playSelectSfx();
+  setBgm('event_maris_theme'); // back to the regular DW/FA cover BGM
+  setBgs(null);
+
+  const $trans = document.getElementById('scene-transition');
+  $trans.classList.add('active');
+
+  setTimeout(() => {
+    document.body.classList.remove('bs-only-select');
+    document.body.classList.add('bs-locked');
+    // Restore whichever cover (DW=0 / FA=1) the user was on before entering BS-only mode.
+    selectIdx = (_bsOnlyReturnIdx >= 0 && _bsOnlyReturnIdx <= 1) ? _bsOnlyReturnIdx : 0;
+    currentSelectBg = '';
+    updateSelectCursor();
+
     setTimeout(() => {
       $trans.classList.remove('active');
       animating = false;
@@ -2755,7 +2831,7 @@ document.addEventListener('keydown', (e) => {
   // ── SELECT SCREEN ──
   if (state === 'select') {
     if (key === 'a' || key === 'A' || key === 'ArrowLeft') {
-      if (selectIdx > 0) { selectIdx--; updateSelectCursor(); playCursorSfx(); }
+      if (selectIdx > minSelectIdx()) { selectIdx--; updateSelectCursor(); playCursorSfx(); }
     } else if (key === 'd' || key === 'D' || key === 'ArrowRight') {
       if (selectIdx < maxSelectIdx()) { selectIdx++; updateSelectCursor(); playCursorSfx(); }
     } else if (key === ' ' || key === 'Enter' || key === 'z' || key === 'Z') {
