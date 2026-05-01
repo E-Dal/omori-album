@@ -23,9 +23,6 @@
 
   /* ── Pixel-art rendering ── */
   img, canvas { image-rendering: pixelated; }
-  /* Photos contain hand-drawn detail, not crisp pixel art — pixelated at fractional
-     scene scale produces ugly blocky/uneven artifacts. Use bilinear smoothing instead. */
-  #viewer-photo, .photo-slot img { image-rendering: auto; }
 
   /* ── Parallax ── */
   #parallax-bg {
@@ -70,12 +67,6 @@
     transform: scale(1.02);
     transition: opacity 0.3s;
   }
-  /* BlackSpace cover: tile the parallax sky and animate it via JS (drift toward
-     the lower-left, matching Scene_OmoriTitleScreen.update in the original game). */
-  body.on-select-bs #select-bg {
-    background-size: auto;
-    background-repeat: repeat;
-  }
   #select-gif {
     position: fixed; z-index: 99;
     bottom: -2px; left: 50%;
@@ -98,6 +89,7 @@
   .album-cover-btn {
     text-align: center;
     transition: transform 0.2s;
+    cursor: pointer;
   }
   .album-cover-btn.selected { transform: scale(1.08); }
   .album-cover-btn canvas { height: 240px; width: auto; }
@@ -146,7 +138,7 @@
   }
   .album-cover-btn.selected .select-cursor { visibility: visible; }
   .select-hint {
-    color: #fff; font-size: 18px; letter-spacing: 1px; text-align: center; line-height: 1.5;
+    color: #fff; font-size: 15px; letter-spacing: 1px; text-align: center; line-height: 1.5;
   }
 
   /* ── Game viewport (640x480 scaled) ── */
@@ -163,11 +155,6 @@
     transform-origin: center center;
     overflow: visible;
   }
-  /* Game-accurate easings (Object_Movement.easeInCirc/easeOutCirc from Omori BASE.js L5475) */
-  :root {
-    --ease-out-circ: cubic-bezier(0, 0.55, 0.45, 1);
-    --ease-in-circ:  cubic-bezier(0.55, 0, 1, 0.45);
-  }
 
   /* ── Legend bar (top HUD) ── */
   /* Legend bar is fixed to the viewport top (full width), scales its height/text via --scale */
@@ -179,8 +166,7 @@
     display: none;
     align-items: center; justify-content: center;
     z-index: 30;
-    /* Game: legend tween 25 frames (0.42s), easeOutCirc (both hide and show) */
-    transition: opacity 0.42s var(--ease-out-circ), transform 0.42s var(--ease-out-circ);
+    transition: opacity 0.3s, transform 0.3s;
   }
   body.in-album #legend-bar { display: flex; }
   #legend-bar-inner {
@@ -242,10 +228,10 @@
                 transform 0.3s cubic-bezier(0.33,1,0.68,1),
                 opacity 0.35s;
   }
-  /* Inactive state (reading a description): matches OMORI's exact
-     setColorTone([-80,-80,-80,255]) — fully desaturated then RGB subtract 80/255 */
+  /* Inactive state (e.g. while reading a description): matches OMORI's
+     setColorTone([-80,-80,-80,255]) — dimmed + fully desaturated */
   #hand-cursor.inactive {
-    filter: grayscale(100%) url(#omori-tone-dark);
+    filter: grayscale(100%) brightness(0.7);
   }
 
   /* ── Page turn controls (game-accurate) ── */
@@ -286,42 +272,12 @@
     z-index: 999;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.25s linear;
+    transition: opacity 0.25s;
   }
   #scene-transition.active {
     opacity: 1;
     pointer-events: all;
   }
-
-  /* "Something" eye — bottom-left, hover to reveal, click to toggle BS visibility */
-  #something-corner {
-    position: fixed;
-    bottom: 0; left: 0;
-    width: 60px; height: 70px;
-    z-index: 200;
-    pointer-events: none; /* invisible zone; only the eye captures clicks */
-  }
-  #something-eye {
-    position: absolute;
-    bottom: 12px; left: 14px;
-    width: 9px; height: 30px;     /* ~1/3 of native 26×89 */
-    image-rendering: pixelated;
-    opacity: 0;
-    transition: opacity 0.4s ease;
-    pointer-events: none;
-    cursor: pointer;
-  }
-  /* Eye is always present on the select screen; only the hover state surfaces it.
-     Clicking toggles bs-locked so the user can hide/show BS at any time. */
-  body.on-select #something-corner { pointer-events: auto; }
-  body.on-select #something-corner:hover #something-eye {
-    opacity: 1;
-    pointer-events: auto;
-  }
-  /* Locked: hide the BS cover button so DW/FA appear as the only choices */
-  body.bs-locked .album-cover-btn[data-album="blackspace"] { display: none; }
-  /* BS has no stages — hide its (empty) stage roller but keep the layout slot */
-  .album-cover-btn[data-album="blackspace"] .stage-roller { visibility: hidden; }
 
   /* ── Music toggle button ── */
   #music-toggle {
@@ -402,8 +358,7 @@
     background: #000; border: 3px solid #fff; outline: 1px solid #000;
     display: flex; align-items: center; justify-content: center;
     z-index: 40;
-    /* Game: arrow enter 25 frames (0.42s), easeOutCirc. Exit overrides inline. */
-    transition: transform 0.42s var(--ease-out-circ), opacity 0.42s var(--ease-out-circ);
+    transition: transform 0.25s ease-out, opacity 0.25s ease-out;
     will-change: transform, opacity;
     cursor: pointer;
   }
@@ -414,20 +369,17 @@
     top: -22px; bottom: -22px; left: -22px; right: -22px;
   }
   .viewer-arrow-box.no-transition { transition: none !important; }
-  /* Game: box y = (480 - 25 - 125) / 2 = 165 → visual center 62.5px above scene center */
-  #viewer-arrow-left { top: 50%; left: 80px; transform: translateY(calc(-50% - 62.5px)) translateX(-380px); }
-  #viewer-arrow-right { top: 50%; left: 515px; width: 44px; transform: translateY(calc(-50% - 62.5px)) translateX(380px); }
+  #viewer-arrow-left { top: 50%; left: 80px; transform: translateY(calc(-50% - 60px)) translateX(-380px); }
+  #viewer-arrow-right { top: 50%; left: 515px; width: 44px; transform: translateY(calc(-50% - 60px)) translateX(285px); }
 
-  /* SHIFT READ prompt — game bitmap y=450 (h=30), but icon sits at bitmap y=4
-     with transparent padding, so visible content floats ~5px above scene bottom */
+  /* SHIFT READ prompt */
   #shift-read-prompt {
     position: absolute;
     bottom: 5px; left: 50%;
     transform: translateX(calc(-50% - 17px));
     display: flex; align-items: center; gap: 8px;
     z-index: 40;
-    /* Game: show 25 frames (0.42s) easeInCirc. Hide overrides to 10 frames (0.17s) inline. */
-    transition: opacity 0.42s var(--ease-in-circ);
+    transition: opacity 0.25s ease;
     cursor: pointer;
   }
   #shift-read-prompt .legend-icon { height: 24px; position: relative; top: 6px; left: -3px; }
@@ -438,12 +390,7 @@
     top: 3px;
   }
   #shift-read-prompt.has-outline span {
-    /* Subtle dark outline — per-layer 0.15 (8 direction stack lands around 0.3-0.4) */
-    text-shadow:
-      -1px -1px 0 rgba(0,0,0,0.15), 1px -1px 0 rgba(0,0,0,0.15),
-      -1px  1px 0 rgba(0,0,0,0.15), 1px  1px 0 rgba(0,0,0,0.15),
-      -1px  0   0 rgba(0,0,0,0.15), 1px  0   0 rgba(0,0,0,0.15),
-       0  -1px 0 rgba(0,0,0,0.15), 0    1px 0 rgba(0,0,0,0.15);
+    text-shadow: -1px -1px 0 #666, 1px -1px 0 #666, -1px 1px 0 #666, 1px 1px 0 #666, 0 -1px 0 #666, 0 1px 0 #666, -1px 0 0 #666, 1px 0 0 #666;
   }
 
   /* ── Message box (for reading descriptions) ── */
@@ -464,7 +411,7 @@
     line-height: 29px;
     z-index: 50;
     display: none;
-    min-height: 111px;
+    min-height: 110px;
   }
   #message-box.has-face {
     padding-left: 126px;
@@ -472,17 +419,12 @@
   #message-box.active {
     display: flex; align-items: flex-start;
     transform-origin: center center;
-    /* Game: Window_Message opennessType=2 scales background+frame (not text contents) on
-       both x+y. We can't easily isolate the background here, and our text is hidden during
-       open (typewriter starts after), so scaleY-only is visually closest — text squish
-       isn't visible because there's no text yet, mirroring the game's "open then draw" flow. */
     animation: msgOpen 0.13s ease-out forwards;
   }
   #message-box.closing {
-    transform-origin: center center;
     animation: msgClose 0.13s ease-in forwards;
   }
-  /* Date label above message box (Yanfly Window_NameBox triggered by \1<text>) */
+  /* Date label above message box (independent positioning) */
   #message-date {
     position: absolute;
     bottom: 125px; left: 18px;
@@ -490,42 +432,35 @@
     border: 3px solid #fff;
     outline: 1px solid #000;
     color: #fff;
-    padding: 0 8px 4px 8px;
-    font-size: 28px;
-    line-height: 30px;
+    padding: 2px 12px;
+    font-size: 29px;
     white-space: nowrap;
     display: none;
     z-index: 51;
-    transform-origin: center center;
+    transform-origin: left center;
   }
   #message-date.active {
     display: block;
-    /* Game (Omori BASE.js Window_Message.updateOpen):
-       x animates from -300 → 77 via asymptotic-decay formula over the 11-frame message open
-       (185ms) — fast at first, slowing toward target = ease-out feel.
-       Concurrently scale(0,0)→(1,1) from center via opennessType=2. */
-    animation: dateOpen 0.183s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: dateSlideIn 0.18s ease-out forwards;
   }
   #message-date.closing {
-    /* Game close: x asymptotically heads back to -300 (slow start, accelerating to off-screen)
-       and scale(1,1)→(0,0) — synced with parent Window_Message close (closeSpeed 25 → 183ms). */
-    animation: dateClose 0.183s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+    animation: dateSlideOut 0.12s ease-in forwards;
   }
-  @keyframes dateOpen {
-    0%   { transform: translateX(-120%) scale(0, 0); }
-    100% { transform: translateX(0)     scale(1, 1); }
+  @keyframes dateSlideIn {
+    0% { transform: translateX(-120%) scaleY(0); }
+    100% { transform: translateX(0) scaleY(1); }
   }
-  @keyframes dateClose {
-    0%   { transform: translateX(0)     scale(1, 1); }
-    100% { transform: translateX(-120%) scale(0, 0); }
+  @keyframes dateSlideOut {
+    0% { transform: translateX(0) scaleY(1); }
+    100% { transform: translateX(-120%) scaleY(0); }
   }
   @keyframes msgOpen {
-    0%   { transform: scaleY(0); }
-    100% { transform: scaleY(1); }
+    0% { transform: scaleY(0); opacity: 1; }
+    100% { transform: scaleY(1); opacity: 1; }
   }
   @keyframes msgClose {
-    0%   { transform: scaleY(1); }
-    100% { transform: scaleY(0); }
+    0% { transform: scaleY(1); opacity: 1; }
+    100% { transform: scaleY(0); opacity: 1; }
   }
   #message-face {
     position: absolute;
@@ -552,19 +487,7 @@
   }
 </style>
 </head>
-<body class="bs-locked">
-
-<!-- SVG filter: replicates MV setColorTone([-80,-80,-80,255]) RGB offset (-80/255 ≈ -0.314) -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <filter id="omori-tone-dark" color-interpolation-filters="sRGB">
-    <feColorMatrix type="matrix" values="
-      1 0 0 0 -0.3137
-      0 1 0 0 -0.3137
-      0 0 1 0 -0.3137
-      0 0 0 1 0
-    "/>
-  </filter>
-</svg>
+<body>
 
 <div id="scene-transition" class="active"></div>
 <div id="parallax-bg"></div>
@@ -605,18 +528,8 @@
         <div class="album-cover-label">FARAWAY TOWN</div>
         <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
       </div>
-      <div class="album-cover-btn" data-album="blackspace">
-        <div class="stage-roller" data-album="blackspace">
-          <div class="stage-arrow stage-left disabled" data-dir="-1"></div>
-          <div class="stage-current"></div>
-          <div class="stage-arrow stage-right disabled" data-dir="1"></div>
-        </div>
-        <canvas id="cover-bs" width="241" height="325"></canvas>
-        <div class="album-cover-label">BLACKSPACE</div>
-        <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
-      </div>
     </div>
-    <div class="select-hint">Besides clicking, you can also use Arrow keys / WASD to navigate,<br>Z / Enter to confirm, and X / Esc to cancel!</div>
+    <div class="select-hint">Arrow keys / WASD to navigate<br>Z / Enter to confirm<br>X / Esc to cancel</div>
   </div>
 </div>
 
@@ -628,11 +541,6 @@
     <path d="M14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
   </svg>
   <div class="music-slash"></div>
-</div>
-
-<!-- "Something" eye: hidden BS unlock. Hover the top-right corner to reveal it; click to unlock the BlackSpace album. -->
-<div id="something-corner" aria-hidden="true">
-  <img id="something-eye" src="assets/ui/Something.png" alt="">
 </div>
 
 <!-- Legend HUD bar (fixed at window top, independent of scene positioning) -->
@@ -779,84 +687,55 @@ const ALBUMS = {
       [37,38,39,40,41,42],[43,44,45,46,47,48],
     ],
     texts: null,
-    stages: ['INITIAL', 'MARI BACK', '+TREEHOUSE', 'SCRIBBLED'],
+    stages: ['INITIAL', 'MARI BACK', '+TREEHOUSE', 'MIXED ROUTE'],
     stageData: [
       // INITIAL: Mari (22 photos) + Treehouse (37) hidden as empty slots
-      { maxPages: 8, totalPhotos: 48, bgm: 'theme_basil2', pages: [
-        [ 1, 0, 0, 4, 5, 0],
-        [ 0, 8, 9,10,11,12],
-        [ 0, 0, 0,16, 0,18],
+      { maxPages: 8, totalPhotos: 48, pages: [
+        [1, 0, 0, 4, 5, 0],
+        [0, 8, 9,10,11,12],
+        [0, 0, 0,16, 0,18],
         [19,20,21,22, 0, 0],
         [25,26,27, 0, 0, 0],
         [31,32,33,34,35, 0],
-        [ 0,38, 0, 0, 0, 0],
+        [0,38, 0, 0, 0, 0],
         [43,44, 0, 0, 0, 0],
       ]},
       // MARI BACK: All except 37 (treehouse)
-      { maxPages: 8, totalPhotos: 48, bgm: 'event_maris_theme', pages: [
+      { maxPages: 8, totalPhotos: 48, pages: [
         [1,2,3,4,5,6],[7,8,9,10,11,12],
         [13,14,15,16,17,18],[19,20,21,22,23,24],
         [25,26,27,28,29,30],[31,32,33,34,35,36],
         [0,38,39,40,41,42],[43,44,45,46,47,48],
       ]},
       // +TREEHOUSE: full 48
-      { maxPages: 8, totalPhotos: 48, bgm: 'fat_treehouse', pages: [
+      { maxPages: 8, totalPhotos: 48, pages: [
         [1,2,3,4,5,6],[7,8,9,10,11,12],
         [13,14,15,16,17,18],[19,20,21,22,23,24],
         [25,26,27,28,29,30],[31,32,33,34,35,36],
         [37,38,39,40,41,42],[43,44,45,46,47,48],
       ]},
-      // SCRIBBLED: same layout as INITIAL but uses scribbled variants — silent
+      // MIXED ROUTE: same layout as INITIAL but uses scribbled variants
       {
         maxPages: 8, totalPhotos: 48,
         fullPrefix: 'assets/fullsize/FA_AS_',
         thumbSuffix: 'S',
-        bgm: null, // game-accurate: no BGM in scribbled
         pages: [
-          [ 1, 0, 0, 4, 5, 0],
-          [ 0, 8, 9,10,11,12],
-          [ 0, 0, 0,16, 0,18],
+          [1, 0, 0, 4, 5, 0],
+          [0, 8, 9,10,11,12],
+          [0, 0, 0,16, 0,18],
           [19,20,21,22, 0, 0],
           [25,26,27, 0, 0, 0],
           [31,32,33,34,35, 0],
-          [ 0,38, 0, 0, 0, 0],
+          [0,38, 0, 0, 0, 0],
           [43,44, 0, 0, 0, 0],
         ],
       },
     ],
   },
-  blackspace: {
-    name: 'BLACKSPACE',
-    bookImage: 'assets/ui/blackspace_album.png',
-    parallax: 'assets/ui/Blackspace_polaroidBG_FA_day.png',
-    parallaxFg: 'assets/ui/Blackspace_polaroidBG_FA.png',
-    face: null, // no Basil face for BS — no description box uses face yet
-    readOutline: true,
-    selectBg: 'assets/ui/Blackspace_polaroidBG_FA_day.png', // red sky (no black overlay = differentiate from inside-album view)
-    selectGif: null,
-    pageTextPrefix: 'assets/pages/blackspace_pg',
-    thumbPrefix: 'assets/thumbnails/BS_POLAROID_',
-    fullPrefix: 'assets/fullsize/BS_A_',
-    thumbSuffix: '', fullSuffix: '',
-    selectBgm: null,         // silent on the BS cover (mari's theme fades out)
-    defaultBgm: 'bs_listening',
-    defaultBgs: 'amb_kettle',
-    maxPages: 4, totalPhotos: 24,
-    pages: [
-      [ 1, 2, 3, 4, 5, 6],
-      [ 7, 8, 9,10,11,12],
-      [13,14,15,16,17,18],
-      [19,20,21,22,23,24],
-    ],
-    texts: null,
-    // No stages defined yet — single state shows all 24 photos
-  },
 };
 
 // Current stage index per album (indexed by album key)
-const stageIdx = { dreamworld: 0, faraway: 0, blackspace: 0 };
-// Map selectIdx (0..2) to album key — keep order in sync with HTML cover buttons
-const SELECT_KEYS = ['dreamworld', 'faraway', 'blackspace'];
+const stageIdx = { dreamworld: 0, faraway: 0 };
 
 // Easter egg: the blurry group photo (DW_A_12) at slot 11 of PROLOGUE.
 // Hidden by default. Revealed by pressing right arrow while viewing photo 11.
@@ -874,7 +753,6 @@ function isDW12Hidden() {
 fetch('assets/album_segments.json?v=' + Date.now()).then(r => r.json()).then(data => {
   ALBUMS.dreamworld.texts = data.dreamworld;
   ALBUMS.faraway.texts = data.faraway;
-  ALBUMS.blackspace.texts = data.blackspace;
 });
 
 // Photo slot positions on the open book (from game code)
@@ -932,64 +810,17 @@ let state = 'select'; // select | browsing | viewing | message
 // Reflect state on body for CSS (e.g. hide parallax layers on select screen)
 window.addEventListener('DOMContentLoaded', () => {
   document.body.classList.add('on-select');
-  // Restore BS visibility preference: locked by default, unlocked if user previously toggled.
-  try {
-    const stored = localStorage.getItem('bsLocked');
-    if (stored === '0') document.body.classList.remove('bs-locked');
-  } catch (e) { /* localStorage may be disabled — keep default locked state */ }
 });
 let album = null;
 let page = 0;
 let cursorIdx = 0;
 let selectIdx = 0;
 let viewingIdx = 0;
-// Treehouse flip easter egg (Faraway photo #37)
-let photoFlipped = false;   // currently showing back?
-let photoFlipping = false;  // mid-animation?
 let messageReturnTo = 'browsing';
 let msgBoxes = [];       // current message boxes array (each box = array of lines)
 let msgBoxIdx = 0;       // current box index
 let msgLineIdx = 0;      // current line index within current box
 let msgTyping = false;   // typewriter in progress
-let msgPauseActive = false; // 10-frame inter-segment wait — ignore clicks during this
-let msgHoldFast = false; // user is holding Z/X/Shift/click → fast-forward (game's _showFast)
-let msgHoldFastUnlockAt = 0; // briefly disable hold-fast after a box switch so the first
-                              // segment types visibly even if the user is still holding
-let msgPauseTimer = null;
-const SEGMENT_PAUSE = 167; // \! → startWait(10) = 10 frames @ 60fps
-function startContinuePause() {
-  // Game-accurate \! pause: 10 frames during which input is ignored AND the pause sign
-  // fades in (OMORI BASE _updatePauseSign: alpha += 0.1 each frame while pause=true).
-  // Total 167ms. Click during this window is dropped (matches updateWait → return).
-  // After the pause: cursor fully visible, click accepted, advance is INSTANT (no extra
-  // delay) — that's the key fix vs the old "delay-after-click" version.
-  if (msgHoldFast) {
-    // YEP_MessageCore: isFastForward() makes updateWait return false → wait bypassed.
-    msgPauseActive = false;
-    document.getElementById('message-continue').style.opacity = '0';
-    advanceMessage();
-    return;
-  }
-  msgPauseActive = true;
-  const $cur = document.getElementById('message-continue');
-  $cur.style.transition = 'none';
-  $cur.style.opacity = '0';
-  $cur.offsetHeight; // force reflow so the next transition starts cleanly from 0
-  $cur.style.transition = `opacity ${SEGMENT_PAUSE}ms linear`;
-  $cur.style.opacity = '1';
-  if (msgPauseTimer) clearTimeout(msgPauseTimer);
-  msgPauseTimer = setTimeout(() => {
-    msgPauseActive = false;
-    msgPauseTimer = null;
-    if (msgHoldFast) advanceMessage();
-  }, SEGMENT_PAUSE);
-}
-function hideContinueCursor() {
-  // Game: when pause becomes false, sprite.alpha = 0 instantly (no fade).
-  const $cur = document.getElementById('message-continue');
-  $cur.style.transition = 'none';
-  $cur.style.opacity = '0';
-}
 let msgSkipMode = false; // once user skips once, rest of message types instantly
 let msgTypingTimer = null;
 let msgPrevLines = '';   // accumulated previous lines in current box
@@ -1001,133 +832,31 @@ let _debugAnimTickFn = null;    // 内部用，当前调试动画的 tick 函数
 
 // Cursor bob animation
 let cursorBobAngle = 0;
-// Pause bob ONLY during animations that translate the cursor (viewer enter/exit, message
-// open/close). Page-turn animations don't move the cursor, so bob should keep going.
-let cursorBobPaused = false;
 
 // ═══════════════════════════════════════════════════
 //  Audio
 // ═══════════════════════════════════════════════════
-const BGM_VOLUME = 0.6;       // target volume when fully faded in
-const BGS_VOLUME = 0.5;       // ambient layer (slightly quieter than BGM)
-const BGM_FADE_MS = 600;      // each fade direction
-
-// Shared AudioContext for everything (BGM, BGS, SFX, text blips).
-// Web Audio gives us gapless looping (HTMLAudioElement has a seam on loop).
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-// Generic looping-audio layer with crossfade between tracks. Used for BGM + BGS.
-function makeAudioLayer(defaultVol) {
-  const cache = {};
-  let source = null;
-  let gain = null;
-  let currentName = null;
-  function ensureGain() {
-    if (gain) return;
-    gain = audioCtx.createGain();
-    gain.gain.value = 0;
-    gain.connect(audioCtx.destination);
-  }
-  function stop() {
-    if (source) {
-      try { source.stop(); } catch (e) {}
-      source.disconnect();
-      source = null;
-    }
-  }
-  function setTrack(name) {
-    // Skip only when the name is unchanged AND state already matches (playing for set, silent for null)
-    if (name === currentName && (source || !name)) return;
-    currentName = name;
-    ensureGain();
-    const fadeSec = BGM_FADE_MS / 1000;
-    const startSource = (buffer) => {
-      if (currentName !== name) return;
-      if (!musicEnabled) return; // toggleMusic re-arms when music turns on
-      stop();
-      const src = audioCtx.createBufferSource();
-      src.buffer = buffer;
-      src.loop = true; // gapless
-      src.connect(gain);
-      src.start();
-      source = src;
-      const t = audioCtx.currentTime;
-      gain.gain.cancelScheduledValues(t);
-      gain.gain.setValueAtTime(0, t);
-      gain.gain.linearRampToValueAtTime(defaultVol, t + fadeSec);
-    };
-    const swapAndStart = () => {
-      if (currentName !== name) return;
-      stop();
-      if (!name) return;
-      if (cache[name]) startSource(cache[name]);
-      else fetch(`assets/audio/${name}.ogg`)
-        .then(r => r.arrayBuffer())
-        .then(buf => audioCtx.decodeAudioData(buf))
-        .then(buffer => { cache[name] = buffer; startSource(buffer); })
-        .catch(() => {});
-    };
-    if (source) {
-      // Crossfade: ramp current source to 0, then swap
-      const now = audioCtx.currentTime;
-      gain.gain.cancelScheduledValues(now);
-      gain.gain.setValueAtTime(gain.gain.value, now);
-      gain.gain.linearRampToValueAtTime(0, now + fadeSec);
-      setTimeout(swapAndStart, BGM_FADE_MS);
-    } else {
-      // No active source — start immediately (no fade-out delay)
-      swapAndStart();
-    }
-  }
-  return {
-    setTrack, stop,
-    isPlaying: () => !!source,
-    getCurrent: () => currentName,
-  };
-}
-
-const bgmLayer = makeAudioLayer(BGM_VOLUME);
-const bgsLayer = makeAudioLayer(BGS_VOLUME);
-function setBgm(name) { bgmLayer.setTrack(name); }
-function setBgs(name) { bgsLayer.setTrack(name); }
-const sfxBuffers = {}; // name → AudioBuffer (populated async)
-function loadSfx(name, url) {
-  fetch(url).then(r => r.arrayBuffer())
-    .then(buf => audioCtx.decodeAudioData(buf))
-    .then(decoded => { sfxBuffers[name] = decoded; })
-    .catch(() => {});
-}
-function playSfxBuffer(name, volume = 0.9) {
-  if (!musicEnabled || !sfxBuffers[name]) return;
-  if (audioCtx.state === 'suspended') audioCtx.resume();
-  const source = audioCtx.createBufferSource();
-  source.buffer = sfxBuffers[name];
-  const gain = audioCtx.createGain();
-  gain.gain.value = volume;
-  source.connect(gain);
-  gain.connect(audioCtx.destination);
-  source.start(0);
-}
-loadSfx('pageTurn', 'assets/audio/SE_turn_page.ogg');
-loadSfx('cursor',   'assets/audio/sys_cursor1.ogg');
-loadSfx('select',   'assets/audio/SYS_select.ogg');
-loadSfx('cancel',   'assets/audio/sys_cancel.ogg');
-loadSfx('buzzer',   'assets/audio/sys_buzzer.ogg');
-const playPageTurnSfx = () => playSfxBuffer('pageTurn');
-const playCursorSfx   = () => playSfxBuffer('cursor');
-const playSelectSfx   = () => playSfxBuffer('select');
-const playCancelSfx   = () => playSfxBuffer('cancel');
-const playBuzzerSfx   = () => playSfxBuffer('buzzer');
-// Text blip via same Web Audio pipeline. Game config: SYS_text, volume 50, pitch 100 ± 10.
+const bgm = new Audio('assets/audio/event_maris_theme.ogg');
+bgm.loop = true;
+bgm.volume = 0.6;
+const sfxPageTurn = new Audio('assets/audio/SE_turn_page.ogg');
+sfxPageTurn.volume = 0.7;
+// Web Audio API for low-latency text blips (game-accurate)
+// Game config: SYS_text, volume 50, pitch 100 ± 10, interval 2
+let audioCtx = null;
 let textBlipBuffer = null;
+
 fetch('assets/audio/SYS_text.ogg')
   .then(r => r.arrayBuffer())
-  .then(buf => audioCtx.decodeAudioData(buf))
+  .then(buf => {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx.decodeAudioData(buf);
+  })
   .then(decoded => { textBlipBuffer = decoded; })
   .catch(() => {});
 
 function playTextBlip() {
-  if (!musicEnabled || !textBlipBuffer) return;
+  if (!musicEnabled || !audioCtx || !textBlipBuffer) return;
   if (audioCtx.state === 'suspended') audioCtx.resume();
   const source = audioCtx.createBufferSource();
   source.buffer = textBlipBuffer;
@@ -1246,23 +975,22 @@ let musicEnabled = false;
 
 function toggleMusic() {
   const btn = document.getElementById('music-toggle');
-  musicEnabled = !musicEnabled;
-  btn.classList.toggle('playing', musicEnabled);
-  if (musicEnabled) {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    // Re-arm both layers if a track is set but the source was stopped on mute
-    [bgmLayer, bgsLayer].forEach(layer => {
-      const n = layer.getCurrent();
-      if (n && !layer.isPlaying()) layer.setTrack(n);
-    });
+  if (bgm.paused) {
+    bgm.play().catch(() => {});
+    btn.classList.add('playing');
+    musicEnabled = true;
   } else {
-    bgmLayer.stop();
-    bgsLayer.stop();
+    bgm.pause();
+    btn.classList.remove('playing');
+    musicEnabled = false;
   }
 }
 
-// Legacy aliases (pool-based now; kept so existing call sites keep working)
-const playSfx = playPageTurnSfx;
+function playSfx() {
+  if (!musicEnabled) return;
+  sfxPageTurn.currentTime = 0;
+  sfxPageTurn.play().catch(() => {});
+}
 
 function drawKeyIcons() {
   document.querySelectorAll('.page-key-icon').forEach(canvas => {
@@ -1281,11 +1009,10 @@ function drawCovers() {
   const img = new Image();
   img.onload = () => {
     const cw = 241, ch = 325;
-    // Atlas order in PhotoAlbumCovers.png: 0=Faraway, 1=Dreamworld, 2=BlackSpace
-    const frames = {'cover-fa': 0, 'cover-dw': 1, 'cover-bs': 2};
-    Object.keys(frames).forEach((id) => {
+    // Frame 0=green(Faraway), Frame 2=purple(Headspace)
+    const frames = {'cover-dw': 1, 'cover-fa': 0};
+    ['cover-dw', 'cover-fa'].forEach((id) => {
       const c = document.getElementById(id);
-      if (!c) return;
       const ctx = c.getContext('2d');
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(img, frames[id] * cw, 0, cw, ch, 0, 0, cw, ch);
@@ -1298,62 +1025,44 @@ function drawCovers() {
 //  Main Loop (parallax + cursor animation)
 // ═══════════════════════════════════════════════════
 let resetParallax = () => {}; // populated when startLoop runs
-let resetBsScroll = () => {}; // populated when startLoop runs
 function startLoop() {
   const $fg = document.getElementById('parallax-fg');
   let parallaxX = 0;
   let lastParallaxSnap = 0;
-  // BlackSpace cover scroll — drifts the select bg toward the lower-left
-  // (game's Scene_OmoriTitleScreen.update: origin.x += 0.5, origin.y -= 0.5)
-  let bsScrollX = 0, bsScrollY = 0;
-  const $selectBg = document.getElementById('select-bg');
   resetParallax = () => { parallaxX = 0; lastParallaxSnap = 0; };
-  resetBsScroll = () => { bsScrollX = 0; bsScrollY = 0; $selectBg.style.backgroundPosition = ''; };
 
   function tick() {
 
-    // Parallax scroll inside an album. BlackSpace stays static for visual
-    // contrast against its drifting cover bg on the select screen.
-    if (state !== 'select' && album !== ALBUMS.blackspace) {
-      parallaxX -= 0.1;
-      const snapped = Math.round(parallaxX);
+    // Parallax scroll (only inside album, not on select screen)
+    if (state !== 'select') {
+      parallaxX -= 0.25;
+      const snapped = Math.round(parallaxX / 1.5) * 1.5;
       if (snapped !== lastParallaxSnap) {
         lastParallaxSnap = snapped;
         $parallax.style.backgroundPosition = `${snapped}px 0`;
       }
     }
 
-    // BS select cover drift — keyed off the *currently-displayed* bg image so the
-    // scrolling keeps going during the fade-to-black, only stopping the moment
-    // updateSelectCursor swaps to the new bg behind the fully-black overlay.
-    if (state === 'select' && currentSelectBg === ALBUMS.blackspace.selectBg) {
-      bsScrollX -= 0.5;
-      bsScrollY += 0.5;
-      $selectBg.style.backgroundPosition = `${Math.round(bsScrollX)}px ${Math.round(bsScrollY)}px`;
-    }
-
-    // Cursor bob — game-accurate (Sprite_WindowCustomCursor, Omori BASE.js L4171):
-    // duration 20, speed 0.5, amplitude 0.1 × cursor_width (29px) ≈ 2.9px;
-    // full sine cycle = 40 frames (~0.67s).
-    cursorBobAngle = (cursorBobAngle + 0.5) % 20;
-    if (state === 'browsing' && !cursorBobPaused) {
-      const bobX = Math.sin(cursorBobAngle * (Math.PI / 10)) * 2.9;
+    // Cursor bob (sine wave on anchor, like game)
+    cursorBobAngle = (cursorBobAngle + 0.7) % 20;
+    if (state === 'browsing' && !animating) {
+      const bobX = Math.sin(cursorBobAngle * (Math.PI / 10)) * 2;
       $cursor.style.marginLeft = (bobX + 8) + 'px';
     }
 
-    // Select screen cursor bob — same sine, amp 2.9 (cursor width 29 × 0.1)
+    // Select screen cursor bob (vertical, current position = highest point)
     if (state === 'select') {
-      const bobY = Math.sin(cursorBobAngle * (Math.PI / 10)) * 2.9;
+      const bobY = Math.sin(cursorBobAngle * (Math.PI / 10)) * 2;
       document.querySelectorAll('.select-cursor').forEach(c => {
         c.style.transform = `rotate(-90deg) translateX(${-bobY}px)`;
       });
     }
 
-    // Message continue cursor bob (same as game)
+    // Message hand bob (slightly slower)
     if (state === 'message') {
       const msgHand = document.getElementById('message-continue');
       if (msgHand && msgHand.style.opacity !== '0') {
-        const msgBob = Math.sin(cursorBobAngle * (Math.PI / 10)) * 2.9;
+        const msgBob = Math.sin(cursorBobAngle * (Math.PI / 10)) * 2;
         msgHand.style.marginRight = msgBob + 'px';
       }
     }
@@ -1393,10 +1102,6 @@ updateScale();
 //  Album Select
 // ═══════════════════════════════════════════════════
 let currentSelectBg = '';
-// Highest selectable index — capped to DW/FA when BS is locked
-function maxSelectIdx() {
-  return document.body.classList.contains('bs-locked') ? 1 : SELECT_KEYS.length - 1;
-}
 
 // Update both stage rollers (current label + grey out arrows at edges)
 function updateStageRollers() {
@@ -1418,7 +1123,6 @@ function changeAlbumStage(albumKey, delta) {
   if (next < 0 || next >= stages.length) return;
   stageIdx[albumKey] = next;
   updateStageRollers();
-  playCursorSfx();
 }
 
 // Wire up arrow clicks (once, after DOM is ready)
@@ -1433,38 +1137,18 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Click only the cover canvas (not the label/cursor/padding) — tighter hit area
+  // Click album cover: first click selects, second click (already-selected) enters
   document.querySelectorAll('.album-cover-btn').forEach((btn, i) => {
-    const canvas = btn.querySelector('canvas');
-    if (!canvas) return;
-    canvas.style.cursor = 'pointer';
-    canvas.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
       if (state !== 'select' || animating) return;
       if (selectIdx === i) {
-        playSelectSfx();
-        openAlbum(SELECT_KEYS[i]);
+        openAlbum(i === 0 ? 'dreamworld' : 'faraway');
       } else {
         selectIdx = i;
         updateSelectCursor();
-        playCursorSfx();
       }
     });
   });
-
-  // "Something" eye click → toggle BlackSpace album visibility (persisted via localStorage)
-  const $somethingEye = document.getElementById('something-eye');
-  if ($somethingEye) {
-    $somethingEye.addEventListener('click', () => {
-      const wasLocked = document.body.classList.toggle('bs-locked'); // returns final state
-      try { localStorage.setItem('bsLocked', wasLocked ? '1' : '0'); } catch (e) {}
-      // If we just hid BS while it was selected, clamp the select cursor back
-      if (wasLocked && selectIdx > maxSelectIdx()) {
-        selectIdx = maxSelectIdx();
-        updateSelectCursor();
-      }
-      playSelectSfx();
-    });
-  }
 
   // Page-turn arrow clicks (disabled class removes pointer-events via CSS)
   $pageTurnL.addEventListener('click', () => {
@@ -1498,43 +1182,24 @@ window.addEventListener('DOMContentLoaded', () => {
     } else {
       cursorIdx = idx;
       updateCursor();
-      playCursorSfx();
     }
   });
 
-  // Fullscreen viewer + message clicks (delegated on #game-viewport so background
-  // areas outside the 640×480 scene also count as "click empty space to exit")
-  $viewport.addEventListener('click', (e) => {
+  // Fullscreen viewer + message clicks (delegated on #scene)
+  $scene.addEventListener('click', (e) => {
     // In reading mode, any click advances the message
     if (state === 'message') {
       advanceMessage();
       return;
     }
-    const t = e.target;
-    if (state === 'browsing' && !animating) {
-      // Click outside the album (and not on page-turn / legend) → return to select screen
-      if (!(t.closest && (t.closest('#album-book') || t.closest('.page-turn-group') || t.closest('#legend-bar')))) {
-        goBackToSelect();
-      }
-      return;
-    }
     if (state !== 'viewing' || animating) return;
-    if (photoFlipping) return;
 
+    const t = e.target;
     // Arrow clicks (extended hit area via ::before pseudo-element bubbles here)
     if (t.closest && t.closest('#viewer-arrow-left')) { slideViewingPhoto(-1); return; }
     if (t.closest && t.closest('#viewer-arrow-right')) { slideViewingPhoto(1); return; }
-    // SHIFT READ prompt → read (blocked when the flippable photo is showing its back)
-    if (t.closest && t.closest('#shift-read-prompt')) {
-      if (isFlippablePhoto() && photoFlipped) return;
-      const vnum = photoNumAtIdx(viewingIdx);
-      if (vnum && photoHasText(vnum - 1)) showMessage(album.texts[vnum - 1]);
-      return;
-    }
-    // Photo click
-    if (t === $viewerPhoto) {
-      // Treehouse easter egg: clicking flips instead of reading
-      if (isFlippablePhoto()) { flipPhoto(); return; }
+    // Photo or SHIFT READ prompt → read (if text)
+    if (t === $viewerPhoto || (t.closest && t.closest('#shift-read-prompt'))) {
       const vnum = photoNumAtIdx(viewingIdx);
       if (vnum && photoHasText(vnum - 1)) showMessage(album.texts[vnum - 1]);
       return;
@@ -1549,36 +1214,25 @@ function updateSelectCursor() {
   btns.forEach((b, i) => b.classList.toggle('selected', i === selectIdx));
 
   // Switch select screen background
-  const selectedAlbum = ALBUMS[SELECT_KEYS[selectIdx]];
-  // BGM on cover: selectBgm overrides global default (BS uses null = silence)
-  setBgm('selectBgm' in selectedAlbum ? selectedAlbum.selectBgm : 'event_maris_theme');
-  // No BGS on the select screen
-  setBgs(null);
+  const selectedAlbum = selectIdx === 0 ? ALBUMS.dreamworld : ALBUMS.faraway;
   const newBg = selectedAlbum.selectBg;
-  const isBs = SELECT_KEYS[selectIdx] === 'blackspace';
 
   if (newBg !== currentSelectBg) {
     const $sbg = document.getElementById('select-bg');
     const $sgif = document.getElementById('select-gif');
     const $sfade = document.getElementById('select-bg-fade');
 
-    const setGif = (src) => {
-      if (src) { $sgif.src = src; $sgif.style.display = ''; }
-      else { $sgif.removeAttribute('src'); $sgif.style.display = 'none'; }
-    };
     if (!currentSelectBg) {
       // First time — no transition
       $sbg.style.backgroundImage = `url('${newBg}')`;
-      setGif(selectedAlbum.selectGif);
+      $sgif.src = selectedAlbum.selectGif;
       currentSelectBg = newBg;
-      document.body.classList.toggle('on-select-bs', isBs);
     } else {
       // Preload new GIF + bg in parallel with the fade-to-black
       const newGif = selectedAlbum.selectGif;
+      const gifPreload = new Image();
       const bgPreload = new Image();
-      const gifReady = newGif
-        ? new Promise(r => { const p = new Image(); p.onload = r; p.onerror = r; p.src = newGif; if (p.complete) r(); })
-        : Promise.resolve();
+      const gifReady = new Promise(r => { gifPreload.onload = r; gifPreload.onerror = r; gifPreload.src = newGif; if (gifPreload.complete) r(); });
       const bgReady = new Promise(r => { bgPreload.onload = r; bgPreload.onerror = r; bgPreload.src = newBg; if (bgPreload.complete) r(); });
 
       // Fade to black
@@ -1586,14 +1240,10 @@ function updateSelectCursor() {
       const fadeDone = new Promise(r => setTimeout(r, 250));
 
       Promise.all([gifReady, bgReady, fadeDone]).then(() => {
-        // Everything loaded AND fade is fully black: swap under cover.
-        // Toggle the BS-tile class here too so the bg-size mode change is hidden by the fade.
+        // Everything loaded AND fade is fully black: swap under cover
         $sbg.style.backgroundImage = `url('${newBg}')`;
-        setGif(newGif);
+        $sgif.src = newGif;
         currentSelectBg = newBg;
-        document.body.classList.toggle('on-select-bs', isBs);
-        // If we're switching AWAY from BS, drop the lingering scroll position now (still hidden by fade)
-        if (!isBs) resetBsScroll();
         // Give browser a frame to paint the new content before lifting the fade
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
@@ -1635,10 +1285,10 @@ function nextVisibleIdx(from, dir) {
   return -1;
 }
 
-// Apply the given stage's data onto the album object (overriding pages/maxPages/prefixes).
-// Albums without stageData (e.g. blackspace) still get BGM/BGS resolution.
+// Apply the given stage's data onto the album object (overriding pages/maxPages/prefixes)
 function applyStage(albumObj, stageNum) {
-  const sd = (albumObj.stageData || [])[stageNum] || {};
+  const sd = (albumObj.stageData || [])[stageNum];
+  if (!sd) return;
   // Restore original defaults first (in case prior stage overrode them)
   if (!albumObj._baseline) {
     albumObj._baseline = {
@@ -1655,9 +1305,6 @@ function applyStage(albumObj, stageNum) {
   albumObj.maxPages    = sd.maxPages    ?? albumObj.maxPages;
   albumObj.totalPhotos = sd.totalPhotos ?? albumObj.totalPhotos;
   if (sd.pages) albumObj.pages = sd.pages;
-  // BGM/BGS: stage override > album default > global default
-  setBgm('bgm' in sd ? sd.bgm : (albumObj.defaultBgm ?? 'event_maris_theme'));
-  setBgs('bgs' in sd ? sd.bgs : (albumObj.defaultBgs ?? null));
 }
 
 function openAlbum(key) {
@@ -1776,7 +1423,7 @@ function openAlbum(key) {
     if ($bookBg.complete && $bookBg.naturalWidth > 0) {
       $bookBg.onload();
     }
-  }, 280); // a hair longer than the 0.25s fade-out so the swap happens fully behind black
+  }, 350);
 }
 
 // ═══════════════════════════════════════════════════
@@ -1903,12 +1550,9 @@ function captureHalfPage(side) {
 }
 
 function waitForPageImages() {
-  // Include $pageOverlay so the handwriting text is loaded before captureHalfPage
-  // snapshots the new page (otherwise it'd be drawn missing the text and the
-  // text would only "appear" after the flip animation ends).
-  const imgs = [...$slots.querySelectorAll('.photo-slot img'), $pageOverlay];
-  const promises = imgs.map(img => {
-    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+  const imgs = $slots.querySelectorAll('.photo-slot img');
+  const promises = Array.from(imgs).map(img => {
+    if (img.complete) return Promise.resolve();
     return new Promise(resolve => {
       img.onload = resolve;
       img.onerror = resolve;
@@ -1969,17 +1613,15 @@ function turnPage(dir) {
     const newCanvas = captureHalfPage(newSide);
 
     let frame = 0;
-    // Snappier than game's 20+15: 12+8 (0.33s total) for crisper turn feel
     const phase1Frames = 12;
-    const phase2Frames = 8;
-    // easeOutCirc formula from Omori BASE.js L5475
-    const easeOutCirc = t => Math.sqrt(1 - (t - 1) * (t - 1));
+    const phase2Frames = 10;
 
     function animateFlip() {
       frame++;
       if (frame <= phase1Frames) {
         const t = frame / phase1Frames;
-        $flip.style.transform = `scaleX(${1 - easeOutCirc(t)})`;
+        const ease = 1 - Math.pow(1 - t, 2);
+        $flip.style.transform = `scaleX(${1 - ease})`;
       } else if (frame === phase1Frames + 1) {
         // Switch to new page canvas
         $flip.innerHTML = '';
@@ -1997,7 +1639,8 @@ function turnPage(dir) {
         $flip.style.transform = 'scaleX(0)';
       } else if (frame <= phase1Frames + phase2Frames + 1) {
         const t = (frame - phase1Frames - 1) / phase2Frames;
-        $flip.style.transform = `scaleX(${easeOutCirc(t)})`;
+        const ease = 1 - Math.pow(1 - t, 2);
+        $flip.style.transform = `scaleX(${ease})`;
       } else {
         $flip.style.display = 'none';
         $flip.innerHTML = '';
@@ -2018,15 +1661,12 @@ function turnPage(dir) {
 //  View Photo (full size)
 // ═══════════════════════════════════════════════════
 function startViewing() {
-  if (!slotHasPhoto(cursorIdx)) { playBuzzerSfx(); return; }
-  playSfx(); // game plays SE_turn_page on viewer open
+  if (!slotHasPhoto(cursorIdx)) return;
   const globalIdx = page * 6 + cursorIdx;
 
   viewingIdx = globalIdx;
   state = 'viewing';
   animating = true;
-  photoFlipped = false;
-  photoFlipping = false;
 
   // Setup photo — use actual photo number from pages[page][slot], not slot index
   const num = photoNumAtIdx(viewingIdx);
@@ -2038,22 +1678,23 @@ function startViewing() {
   // ── Set initial state (no transition yet) ──
   const isFaraway = (album === ALBUMS.faraway);
   $viewerPhoto.style.transition = 'none';
-  // Game: photo starts with top edge at scene bottom (y=480), i.e. 240px below top:50% anchor
-  $viewerPhoto.style.transform = 'translate(-50%, 240px)';
+  $viewerPhoto.style.transform = 'translate(-50%, calc(20% + 0px))';
   $viewerPhoto.style.opacity = isFaraway ? '0' : '1';
 
-  // Album slides out — game: duration 15 frames (0.25s), easeInCirc
-  $book.style.transition = 'transform 0.25s var(--ease-in-circ), opacity 0.25s var(--ease-in-circ)';
+  // Album slide down (slower: 0.8s)
+  $book.style.transition = 'transform 0.3s cubic-bezier(0.7,0,1,0.5) 0.02s, opacity 0.35s cubic-bezier(0.7,0,1,0.5) 0.02s';
   $book.style.transform = 'translateY(500px)';
   $book.style.opacity = '0';
+  // Cursor turns gray + slides down with the book + fades out.
+  // Don't reset marginLeft — freeze wherever the bob was (no snap/teleport).
   $cursor.classList.add('inactive');
-  $cursor.style.transition = 'transform 0.25s var(--ease-in-circ), opacity 0.25s var(--ease-in-circ)';
+  $cursor.style.transition = 'transform 0.3s cubic-bezier(0.7,0,1,0.5) 0.02s, opacity 0.35s cubic-bezier(0.7,0,1,0.5) 0.02s';
   $cursor.style.transform = 'translateY(500px)';
   $cursor.style.opacity = '0';
 
-  // Page turn controls slide down with album (same 15 frames easeInCirc)
-  $pageTurnL.style.transition = 'transform 0.25s var(--ease-in-circ), opacity 0.25s var(--ease-in-circ)';
-  $pageTurnR.style.transition = 'transform 0.25s var(--ease-in-circ), opacity 0.25s var(--ease-in-circ)';
+  // Page turn controls slide down with album
+  $pageTurnL.style.transition = 'transform 0.27s cubic-bezier(0.7,0,1,0.5) 0.02s, opacity 0.35s cubic-bezier(0.7,0,1,0.5) 0.02s';
+  $pageTurnR.style.transition = 'transform 0.27s cubic-bezier(0.7,0,1,0.5) 0.02s, opacity 0.35s cubic-bezier(0.7,0,1,0.5) 0.02s';
   $pageTurnL.style.transform = 'translateY(500px)';
   $pageTurnR.style.transform = 'translateY(500px)';
   $pageTurnL.style.opacity = '0';
@@ -2067,8 +1708,8 @@ function startViewing() {
   // Viewer arrows — start at final position but invisible, slide in together with photo
   $viewerArrowL.classList.add('no-transition');
   $viewerArrowR.classList.add('no-transition');
-  $viewerArrowL.style.transform = 'translateY(calc(-50% - 62.5px)) translateX(-72px)';
-  $viewerArrowR.style.transform = 'translateY(calc(-50% - 62.5px)) translateX(72px)';
+  $viewerArrowL.style.transform = 'translateY(calc(-50% - 60px)) translateX(-72px)';
+  $viewerArrowR.style.transform = 'translateY(calc(-50% - 60px)) translateX(72px)';
   $viewerArrowL.style.opacity = '0';
   $viewerArrowR.style.opacity = '0';
 
@@ -2088,10 +1729,9 @@ function startViewing() {
   // Force layout flush so initial state is applied, then set targets with transition
   $viewerPhoto.offsetHeight;
 
-  // Game: photo y+opacity tween 25 frames (0.42s), easeOutCirc
   $viewerPhoto.style.transition = isFaraway
-    ? 'transform 0.42s var(--ease-out-circ), opacity 0.42s var(--ease-out-circ)'
-    : 'transform 0.42s var(--ease-out-circ)';
+    ? 'transform 0.35s cubic-bezier(0.33,1,0.68,1), opacity 0.117s'
+    : 'transform 0.35s cubic-bezier(0.33,1,0.68,1)';
   $viewerPhoto.style.transform = 'translate(-50%, -50%)';
   $viewerPhoto.style.opacity = '1';
 
@@ -2103,8 +1743,7 @@ function startViewing() {
   $viewerArrowR.style.transition = '';
   updateViewerArrows();
 
-  // Photo takes 25 frames (0.42s) + wait 5 ≈ 500ms
-  setTimeout(() => { animating = false; }, 500);
+  setTimeout(() => { animating = false; }, 450);
 }
 
 // ── Debug: rAF frame-by-frame stepping ──
@@ -2180,12 +1819,9 @@ function _startViewingDebug() {
 }
 
 function endViewing() {
-  if (animating || photoFlipping) return;
-  playCancelSfx();
-  photoFlipped = false;
+  if (animating) return;
   animating = true;
   state = 'browsing';
-  cursorBobPaused = true; // cursor slides back from translateY(500px) to 0; pause bob
 
   // Easter egg discovery: exiting from photo 12 unlocks the blurry thumbnail (session-only)
   const discoveringEgg = isDW12Hidden() && viewingIdx === 11;
@@ -2193,23 +1829,16 @@ function endViewing() {
     easterEgg12Discovered = true;
   }
 
-  // Game: photo exit 15 frames (0.25s), easeInCirc
-  $viewerPhoto.style.transition = 'transform 0.25s var(--ease-in-circ), opacity 0.25s var(--ease-in-circ)';
-  // Game: photo exits back down to top edge at scene bottom
-  $viewerPhoto.style.transform = 'translate(-50%, 240px)';
+  // Photo fades out slightly downward (explicit transition so Headspace also fades)
+  $viewerPhoto.style.transition = 'transform 0.35s cubic-bezier(0.33,1,0.68,1), opacity 0.25s';
+  $viewerPhoto.style.transform = 'translate(-50%, -20%)';
   $viewerPhoto.style.opacity = '0';
 
-  // Game: arrows exit 15 frames (0.25s), easeOutCirc. Also fade to 0 — without
-  // this they linger at full opacity off-screen until viewer.display:none and
-  // pop-disappear on smaller viewports where the slide doesn't fully clear.
-  $viewerArrowL.style.transition = 'transform 0.25s var(--ease-out-circ), opacity 0.25s var(--ease-out-circ)';
-  $viewerArrowR.style.transition = 'transform 0.25s var(--ease-out-circ), opacity 0.25s var(--ease-out-circ)';
-  $viewerArrowL.style.transform = 'translateY(calc(-50% - 62.5px)) translateX(-380px)';
-  $viewerArrowR.style.transform = 'translateY(calc(-50% - 62.5px)) translateX(380px)';
-  $viewerArrowL.style.opacity = '0';
-  $viewerArrowR.style.opacity = '0';
-  // Game: SHIFT READ hide 10 frames (0.17s) easeInCirc
-  $shiftRead.style.transition = 'opacity 0.17s var(--ease-in-circ)';
+  // Viewer arrows slide out to sides (faster than entering)
+  $viewerArrowL.style.transition = 'transform 0.25s ease-in, opacity 0.25s ease-in';
+  $viewerArrowR.style.transition = 'transform 0.25s ease-in, opacity 0.25s ease-in';
+  $viewerArrowL.style.transform = 'translateY(calc(-50% - 60px)) translateX(-380px)';
+  $viewerArrowR.style.transform = 'translateY(calc(-50% - 60px)) translateX(285px)';
   $shiftRead.style.opacity = '0';
 
   // Album slides back up — instantly jump opacity to 0.5, then animate to 1
@@ -2221,19 +1850,20 @@ function endViewing() {
   $pageTurnR.style.opacity = '0.6';
 
   requestAnimationFrame(() => {
-    // Game: album slides back 25 frames (0.42s), easeOutCirc
-    $book.style.transition = 'transform 0.42s var(--ease-out-circ), opacity 0.42s var(--ease-out-circ)';
+    $book.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.7s';
     $book.style.transform = 'translateY(0)';
     $book.style.opacity = '1';
 
-    $pageTurnL.style.transition = 'transform 0.42s var(--ease-out-circ), opacity 0.42s var(--ease-out-circ)';
-    $pageTurnR.style.transition = 'transform 0.42s var(--ease-out-circ), opacity 0.42s var(--ease-out-circ)';
+    $pageTurnL.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.7s';
+    $pageTurnR.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.7s';
     $pageTurnL.style.transform = 'translateY(0)';
     $pageTurnR.style.transform = 'translateY(0)';
     $pageTurnL.style.opacity = '1';
     $pageTurnR.style.opacity = '1';
 
-    $cursor.style.transition = 'transform 0.42s var(--ease-out-circ), opacity 0.42s var(--ease-out-circ)';
+    // Cursor (still gray) slides back up with book and fades in.
+    // Don't reset marginLeft — preserve frozen horizontal position.
+    $cursor.style.transition = 'transform 0.45s cubic-bezier(0.33,1,0.68,1), opacity 0.7s';
     $cursor.style.transform = 'translateY(0)';
     $cursor.style.opacity = '1';
   });
@@ -2258,14 +1888,13 @@ function endViewing() {
     // Cursor fully back: drop gray tint, resume bobbing
     $cursor.classList.remove('inactive');
     animating = false;
-    cursorBobPaused = false;
     // Trigger fade-in rerender of the unlocked easter egg thumbnail
     if (discoveringEgg) {
       justDiscoveredEgg = true;
       renderPage();
       setTimeout(() => { justDiscoveredEgg = false; }, 3000);
     }
-  }, 500);
+  }, 450);
 }
 
 function updateViewerArrows() {
@@ -2279,23 +1908,21 @@ function updateViewerArrows() {
   }
   // translateX(0) = at fixed left position (visible), negative/positive = off-screen
   $viewerArrowL.style.transform = hasPrev
-    ? 'translateY(calc(-50% - 62.5px)) translateX(0)'
-    : 'translateY(calc(-50% - 62.5px)) translateX(-380px)';
+    ? 'translateY(calc(-50% - 60px)) translateX(0)'
+    : 'translateY(calc(-50% - 60px)) translateX(-380px)';
   $viewerArrowL.style.opacity = hasPrev ? '1' : '0';
   $viewerArrowL.style.pointerEvents = hasPrev ? '' : 'none';
   $viewerArrowR.style.transform = hasNext
-    ? 'translateY(calc(-50% - 62.5px)) translateX(0)'
-    : 'translateY(calc(-50% - 62.5px)) translateX(380px)';
+    ? 'translateY(calc(-50% - 60px)) translateX(0)'
+    : 'translateY(calc(-50% - 60px)) translateX(285px)';
   $viewerArrowR.style.opacity = hasNext ? '1' : '0';
   $viewerArrowR.style.pointerEvents = hasNext ? '' : 'none';
 }
 
 function slideViewingPhoto(dir) {
-  if (animating || photoFlipping) return;
+  if (animating) return;
   // Easter egg photo: no nav allowed — user must press X to exit
   if (isDW12Hidden() && viewingIdx === 11) return;
-  // Reset treehouse flip state when navigating away
-  photoFlipped = false;
   // Skip empty slots — find next/prev slot that has a photo
   const newIdx = nextVisibleIdx(viewingIdx, dir);
   if (newIdx < 0) return;
@@ -2313,8 +1940,8 @@ function slideViewingPhoto(dir) {
   oldImg.style.top = '50%';
   oldImg.style.zIndex = '36';
   oldImg.style.imageRendering = 'pixelated';
-  // Game: old photo fade 25 frames (0.42s) easeInCirc
-  oldImg.style.setProperty('transition', 'opacity 0.42s cubic-bezier(0.55, 0, 1, 0.45)', 'important');
+  // Force override transition after cssText copy
+  oldImg.style.setProperty('transition', 'opacity 0.8s linear', 'important');
   $viewer.appendChild(oldImg);
 
   // Fade out old photo
@@ -2334,10 +1961,10 @@ function slideViewingPhoto(dir) {
   $viewerPhoto.style.zIndex = '37';
   $viewerPhoto.src = newSrc;
 
-  // Game: new photo slides in 25 frames (0.42s) easeOutCirc
+  // Start slide animation on next frame
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      $viewerPhoto.style.transition = 'transform 0.42s cubic-bezier(0, 0.55, 0.45, 1)';
+      $viewerPhoto.style.transition = 'transform 0.4s cubic-bezier(0.33,1,0.68,1)';
       $viewerPhoto.style.transform = 'translate(-50%, -50%)';
     });
   });
@@ -2350,54 +1977,11 @@ function slideViewingPhoto(dir) {
   }
   $shiftRead.style.pointerEvents = hasTextNew ? '' : 'none';
 
-  // Clean up old photo after animation (25 frames + wait 5 ≈ 500ms)
+  // Clean up old photo after animation
   setTimeout(() => {
     oldImg.remove();
     animating = false;
-  }, 500);
-}
-
-// ═══════════════════════════════════════════════════
-//  Photo flip easter egg (Faraway treehouse photo #37)
-//  Game: scale.x animates 1 → 0 (10 frames), bitmap swaps, 0 → 1 (10 frames). Linear.
-// ═══════════════════════════════════════════════════
-function isFlippablePhoto() {
-  if (state !== 'viewing') return false;
-  if (album !== ALBUMS.faraway) return false;
-  return photoNumAtIdx(viewingIdx) === 37;
-}
-function flipPhoto() {
-  if (photoFlipping || animating) return;
-  if (!isFlippablePhoto()) return;
-  photoFlipping = true;
-  const PHASE_MS = 500; // ~30 frames at 60fps (3× slower than plugin default for cutscene feel)
-  const goingToBack = !photoFlipped;
-  const backUrl = 'assets/fullsize/FA_A_37_back.png';
-  const frontUrl = fullUrl(album, 37);
-  // Hiding the back-side photo's text means SHIFT READ disappears too —
-  // start fading it the moment we begin flipping (or fade back in once it's safe).
-  $shiftRead.style.transition = `opacity ${PHASE_MS}ms linear`;
-  $shiftRead.style.opacity = goingToBack ? '0' : '1';
-  $shiftRead.style.pointerEvents = goingToBack ? 'none' : '';
-  // Game-accurate stepped easing: 10 discrete scale.x values per phase
-  // (matches plugin's per-frame 0.1 increment — visibly steppy, not smooth).
-  const FLIP_EASING = 'steps(10, end)';
-  // Phase 1: scaleX 1 → 0
-  $viewerPhoto.style.transition = `transform ${PHASE_MS}ms ${FLIP_EASING}`;
-  $viewerPhoto.style.transform = 'translate(-50%, -50%) scaleX(0)';
-  setTimeout(() => {
-    // Swap bitmap at midpoint
-    $viewerPhoto.src = goingToBack ? backUrl : frontUrl;
-    photoFlipped = goingToBack;
-    // Phase 2: scaleX 0 → 1
-    requestAnimationFrame(() => {
-      $viewerPhoto.style.transition = `transform ${PHASE_MS}ms ${FLIP_EASING}`;
-      $viewerPhoto.style.transform = 'translate(-50%, -50%) scaleX(1)';
-    });
-    setTimeout(() => {
-      photoFlipping = false;
-    }, PHASE_MS + 20);
-  }, PHASE_MS);
+  }, 450);
 }
 
 // ═══════════════════════════════════════════════════
@@ -2410,7 +1994,6 @@ function showMessage(boxes) {
   msgBoxIdx = 0;
   msgLineIdx = 0;
   msgPrevLines = '';
-  msgPauseActive = false;
 
   $msgText.innerHTML = '';
   document.getElementById('message-continue').style.opacity = '0';
@@ -2427,18 +2010,8 @@ function showMessage(boxes) {
     $date.classList.add('active');
   }
 
-  // Block advances during the 130ms open animation — otherwise a quick Z/Enter
-  // tap (or stale autorepeat) will increment msgLineIdx before line 0 ever types,
-  // resulting in "first sentence eaten + second sentence printed twice".
-  msgPauseActive = true;
-  setTimeout(() => {
-    // Clear stale hold-fast state so a still-held SHIFT doesn't immediately
-    // fast-forward line 0. 100ms lockout = game's Input.keyRepeatInterval.
-    msgHoldFast = false;
-    msgHoldFastUnlockAt = performance.now() + 100;
-    msgPauseActive = false;
-    typewriteLine();
-  }, 130);
+  // Wait for open animation, then start typing
+  setTimeout(() => typewriteLine(), 130);
 
   // In browsing mode, slide book up a bit
   if (messageReturnTo === 'browsing') {
@@ -2484,8 +2057,8 @@ function typewriteLine() {
     const nextEntry = msgLineIdx + 1 < box.length ? box[msgLineIdx + 1] : null;
     if (nextEntry && !nextEntry.inline) msgPrevLines += '<br>';
     msgTyping = false;
+    document.getElementById('message-continue').style.opacity = '1';
     playTextBlip(); // single blip per line for feedback
-    startContinuePause();
     return;
   }
 
@@ -2505,16 +2078,13 @@ function typewriteLine() {
 
   let chunkIdx = 0;
   let blipCounter = 0;
-  const charsPerFrame = 1.8; // 1.8× MV default (~108 chars/sec)
+  const charsPerFrame = 2;
   const prefix = msgPrevLines;
   const fullHtml = chunks.join('');
 
   cancelAnimationFrame(msgTypingTimer);
   function typeFrame() {
-    // Game-accurate fast-forward: while user holds confirm/cancel/shift/click,
-    // _showFast triggers and the rest of the line types instantly that frame.
-    if (msgHoldFast) chunkIdx = chunks.length;
-    else chunkIdx += charsPerFrame;
+    chunkIdx += charsPerFrame;
     if (chunkIdx > chunks.length) chunkIdx = chunks.length;
     // Show visible part + invisible remainder (preserves word-wrap positions)
     const visible = chunks.slice(0, chunkIdx).join('');
@@ -2541,7 +2111,7 @@ function typewriteLine() {
       if (nextEntry && !nextEntry.inline) {
         msgPrevLines += '<br>';
       }
-      startContinuePause();
+      document.getElementById('message-continue').style.opacity = '1';
     } else {
       msgTypingTimer = requestAnimationFrame(typeFrame);
     }
@@ -2550,10 +2120,6 @@ function typewriteLine() {
 }
 
 function advanceMessage() {
-  // Inside the inter-segment pause: input is dropped (matches game's _waitCount window)
-  if (msgPauseActive) return;
-  // No artificial flicker animation: the natural hide-during-typing /
-  // show-when-done toggle gives the "flicker" feel for free.
   if (msgTyping) {
     // First skip in this message turns on skip mode — rest types instantly
     msgSkipMode = true;
@@ -2572,34 +2138,30 @@ function advanceMessage() {
       msgPrevLines += '<br>';
     }
     msgTyping = false;
-    startContinuePause();
+    document.getElementById('message-continue').style.opacity = '1';
     return;
   }
 
-  // The 167ms inter-segment pause already happened BEFORE this click (during the cursor
-  // fade-in window — see startContinuePause). Click → instant advance, matching the game
-  // where _waitCount is already 0 by the time updateInput accepts the trigger.
-  hideContinueCursor();
-  if (msgPauseTimer) { clearTimeout(msgPauseTimer); msgPauseTimer = null; }
   msgLineIdx++;
   const box = msgBoxes[msgBoxIdx];
 
   if (msgLineIdx < box.length) {
+    // Next line in same box (append below)
     typewriteLine();
   } else {
-    // Move to next box (game equivalent: terminateMessage + new $gameMessage starts)
+    // Move to next box
     msgBoxIdx++;
     if (msgBoxIdx < msgBoxes.length) {
+      // Clear text and continue in same box (no close/open animation)
       $msgText.innerHTML = '';
+      document.getElementById('message-continue').style.opacity = '0';
       msgLineIdx = 0;
       msgPrevLines = '';
       msgSkipMode = false; // reset skip mode for new dialog box
-      // Game-accurate: clearFlags resets _showFast on newPage, then isRepeated
-      // re-fires every keyRepeatInterval (6 frames = 100ms) during a hold.
-      msgHoldFast = false;
-      msgHoldFastUnlockAt = performance.now() + 100;
+      // Date label stays visible
       typewriteLine();
     } else {
+      // All done
       closeMessage();
     }
   }
@@ -2609,7 +2171,6 @@ function closeMessage() {
   cancelAnimationFrame(msgTypingTimer);
   msgTyping = false;
   msgSkipMode = false; // reset skip mode for next message
-  msgPauseActive = false;
 
   // Clear text first, then play close animation
   $msgText.innerHTML = '';
@@ -2637,7 +2198,6 @@ function closeMessage() {
 
     if (messageReturnTo === 'browsing') {
       animating = true;                  // suspend bobbing until slide fully completes
-      cursorBobPaused = true;            // cursor sliding from translateY(-55) to 0
       $book.style.transition = 'transform 0.3s cubic-bezier(0.33,1,0.68,1)';
       $book.style.transform = 'translateY(0)';
       // Cursor: stay gray while sliding back down, only become red after arriving.
@@ -2647,7 +2207,6 @@ function closeMessage() {
       setTimeout(() => {
         $cursor.classList.remove('inactive');
         animating = false;               // resume bob
-        cursorBobPaused = false;
       }, 300);
       $legend.style.opacity = '1';
       $legend.style.transform = 'translateY(0)';
@@ -2665,14 +2224,7 @@ function closeMessage() {
 // ═══════════════════════════════════════════════════
 function goBackToSelect() {
   if (animating) return;
-  playCancelSfx();
   animating = true;
-
-  // Restore the select-screen BGM for whichever album we're returning to
-  // (BS cover stays silent; DW/FA cover plays event_maris_theme).
-  const sel = ALBUMS[SELECT_KEYS[selectIdx]];
-  setBgm('selectBgm' in sel ? sel.selectBgm : 'event_maris_theme');
-  setBgs(null);
 
   // Fade to black
   const $trans = document.getElementById('scene-transition');
@@ -2703,45 +2255,17 @@ function goBackToSelect() {
     $pageTurnL.style.transform = '';
     $pageTurnR.style.transform = '';
 
-    // Fade back in once we're behind the black overlay
+    // Fade back in
     setTimeout(() => {
       $trans.classList.remove('active');
       animating = false;
-    }, 60);
+    }, 50);
   }, 280);
 }
 
 // ═══════════════════════════════════════════════════
 //  Keyboard Input
 // ═══════════════════════════════════════════════════
-// Hold-to-fast-forward (game's _showFast). Fire ONLY on browser autorepeat
-// (e.repeat=true) so a quick tap to advance doesn't accidentally fast-forward
-// the next line.
-const FAST_KEYS = new Set([' ', 'Enter', 'z', 'Z', 'x', 'X', 'Shift', 'Escape']);
-document.addEventListener('keydown', (e) => {
-  if (FAST_KEYS.has(e.key) && e.repeat && performance.now() >= msgHoldFastUnlockAt) {
-    msgHoldFast = true;
-  }
-});
-document.addEventListener('keyup', (e) => {
-  if (FAST_KEYS.has(e.key)) msgHoldFast = false;
-});
-window.addEventListener('blur', () => { msgHoldFast = false; });
-// Pointer hold-to-fast-forward: only after a 400ms press (matches keyboard autorepeat threshold)
-let _pointerHoldTimer = null;
-document.getElementById('scene').addEventListener('pointerdown', () => {
-  if (state !== 'message') return;
-  _pointerHoldTimer = setTimeout(() => {
-    if (performance.now() >= msgHoldFastUnlockAt) msgHoldFast = true;
-  }, 400);
-});
-function _clearPointerHold() {
-  if (_pointerHoldTimer) { clearTimeout(_pointerHoldTimer); _pointerHoldTimer = null; }
-  msgHoldFast = false;
-}
-document.addEventListener('pointerup', _clearPointerHold);
-document.addEventListener('pointercancel', _clearPointerHold);
-
 document.addEventListener('keydown', (e) => {
   // ── Debug frame-step: press Enter to advance one frame ──
   if (typeof DEBUG_FRAME !== 'undefined' && DEBUG_FRAME && e.key === 'Enter' && _debugAnimTickFn) {
@@ -2755,13 +2279,14 @@ document.addEventListener('keydown', (e) => {
   // ── SELECT SCREEN ──
   if (state === 'select') {
     if (key === 'a' || key === 'A' || key === 'ArrowLeft') {
-      if (selectIdx > 0) { selectIdx--; updateSelectCursor(); playCursorSfx(); }
+      selectIdx = 0;
+      updateSelectCursor();
     } else if (key === 'd' || key === 'D' || key === 'ArrowRight') {
-      if (selectIdx < maxSelectIdx()) { selectIdx++; updateSelectCursor(); playCursorSfx(); }
+      selectIdx = 1;
+      updateSelectCursor();
     } else if (key === ' ' || key === 'Enter' || key === 'z' || key === 'Z') {
       e.preventDefault();
-      playSelectSfx();
-      openAlbum(SELECT_KEYS[selectIdx]);
+      openAlbum(selectIdx === 0 ? 'dreamworld' : 'faraway');
     }
     return;
   }
@@ -2785,12 +2310,8 @@ document.addEventListener('keydown', (e) => {
     } else if (key === 'd' || key === 'D' || key === 'ArrowRight') {
       slideViewingPhoto(1);
     } else if (key === 'Shift') {
-      if (isFlippablePhoto() && photoFlipped) return;
       const vnum = photoNumAtIdx(viewingIdx);
       if (vnum && photoHasText(vnum - 1)) showMessage(album.texts[vnum - 1]);
-    } else if (key === ' ' || key === 'Enter' || key === 'z' || key === 'Z') {
-      // Treehouse easter egg flip
-      if (isFlippablePhoto()) { e.preventDefault(); flipPhoto(); }
     }
     return;
   }
@@ -2800,18 +2321,18 @@ document.addEventListener('keydown', (e) => {
     // WASD + Arrow keys: move cursor between photos
     if (key === 'w' || key === 'W' || key === 'ArrowUp') {
       const target = getNavTarget('up');
-      if (target !== undefined) { cursorIdx = target; updateCursor(); playCursorSfx(); }
+      if (target !== undefined) { cursorIdx = target; updateCursor(); }
     } else if (key === 's' || key === 'S' || key === 'ArrowDown') {
       const target = getNavTarget('down');
-      if (target !== undefined) { cursorIdx = target; updateCursor(); playCursorSfx(); }
+      if (target !== undefined) { cursorIdx = target; updateCursor(); }
     } else if (key === 'a' || key === 'A' || key === 'ArrowLeft') {
       // Game logic: right page (3,4,5) → left page (0,1,2)
       // Left middle (1) → left top (0)
       // Left top/bottom (0,2) → turn page left, keep position
       if (cursorIdx >= 3) {
-        cursorIdx = cursorIdx - 3; updateCursor(); playCursorSfx();
+        cursorIdx = cursorIdx - 3; updateCursor();
       } else if (cursorIdx === 1) {
-        cursorIdx = 0; updateCursor(); playCursorSfx();
+        cursorIdx = 0; updateCursor();
       } else if (cursorIdx === 0 || cursorIdx === 2) {
         turnPage(-1);
       }
@@ -2825,10 +2346,10 @@ document.addEventListener('keydown', (e) => {
         if (isDW12Hidden() && page === 1 && target === 5) {
           // stay put — the slot is "not there" in the original game
         } else {
-          cursorIdx = target; updateCursor(); playCursorSfx();
+          cursorIdx = target; updateCursor();
         }
       } else if (cursorIdx === 3 || cursorIdx === 5) {
-        cursorIdx = 4; updateCursor(); playCursorSfx();
+        cursorIdx = 4; updateCursor();
       } else if (cursorIdx === 4) {
         turnPage(1);
       }
