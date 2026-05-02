@@ -55,10 +55,35 @@
   /* When not on select screen, let clicks pass through to the game viewport */
   body:not(.on-select) #select-stage { pointer-events: none; }
   /* ── Album select ── */
+  /* Layout: album-covers anchored to vertical center; h1 above, hint + warning below.
+     Done with absolute positioning instead of flex so the cover row sits at true center
+     regardless of how the text below wraps. */
   #album-select {
     position: absolute; inset: 0; z-index: 100;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 40px;
+  }
+  .album-covers {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+  }
+  #album-select h1 {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, calc(-50% - 230px));
+    margin: 0;
+  }
+  .select-hint {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, calc(-50% + 220px));
+    margin: 0; width: max-content;
+  }
+  .content-warning {
+    position: absolute;
+    /* Fill the stage width so text wraps based on max-width, not on the shrink-to-fit
+       cap that left:50% alone would impose (parent_width - left = 640px). */
+    left: 0; right: 0; bottom: 6px;
+    margin: 0 auto;
   }
   /* Select screen background — always fills the whole window */
   #select-bg {
@@ -146,7 +171,19 @@
   }
   .album-cover-btn.selected .select-cursor { visibility: visible; }
   .select-hint {
-    color: #fff; font-size: 18px; letter-spacing: 1px; text-align: center; line-height: 1.5;
+    color: #fff; font-size: 20px; letter-spacing: 1px; text-align: center; line-height: 1.25;
+  }
+  .content-warning {
+    color: #fff; font-size: 18px; letter-spacing: 0.5px; text-align: center; line-height: 1;
+    max-width: 800px; margin-top: 60px; padding: 0 24px;
+  }
+  /* Show only the appropriate warning based on which select mode we're in. */
+  .content-warning-bs { display: none; }
+  body.bs-only-select .content-warning-default { display: none; }
+  body.bs-only-select .content-warning-bs {
+    display: block;
+    font-size: 28px; /* bigger to feel more urgent (red bg already, no color change) */
+    bottom: 46px; /* lift up so the bigger text isn't crammed against the bottom edge */
   }
 
   /* ── Game viewport (640x480 scaled) ── */
@@ -292,6 +329,8 @@
     opacity: 1;
     pointer-events: all;
   }
+  /* Slow variant — used for the eye-driven BS-only transition (more deliberate, dreamy). */
+  #scene-transition.slow-fade { transition: opacity 1.5s linear; }
 
   /* "Something" eye — bottom-left, hover to reveal, click to toggle BS visibility */
   #something-corner {
@@ -321,9 +360,11 @@
   /* Locked: hide the BS cover button so DW/FA appear as the only choices */
   body.bs-locked .album-cover-btn[data-album="blackspace"] { display: none; }
   /* BS-only-select: secret mode entered via the eye. Only the BS cover is visible
-     (DW + FA hidden); BGM is the BS album's bs_listening throughout this mode. */
+     (DW + FA hidden); BGM is the BS album's bs_listening throughout this mode.
+     Hide the keyboard hint too — the mode has no navigation, so the hint is misleading. */
   body.bs-only-select .album-cover-btn[data-album="dreamworld"],
   body.bs-only-select .album-cover-btn[data-album="faraway"] { display: none; }
+  body.bs-only-select .select-hint { display: none; }
   /* BS has no stages — hide its (empty) stage roller but keep the layout slot */
   .album-cover-btn[data-album="blackspace"] .stage-roller { visibility: hidden; }
 
@@ -620,7 +661,9 @@
         <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
       </div>
     </div>
-    <div class="select-hint">Besides clicking, you can also use Arrow keys / WASD to navigate,<br>Z / Enter to confirm, and X / Esc to cancel!</div>
+    <div class="select-hint">Besides clicking, you can also use Arrow keys / WASD to navigate,<br>Z / Enter to confirm, and X / Esc to cancel! (・∀・)</div>
+    <div class="content-warning content-warning-default">Content warning: this album recreates content from OMORI, which depicts themes of depression, grief, violence, and other imagery that may be distressing to some viewers. Viewer discretion advised.</div>
+    <div class="content-warning content-warning-bs">WARNING: Black Space contains graphic imagery, body horror, and explicit depictions of death — the most disturbing content in OMORI. Proceed only if you're prepared.</div>
   </div>
 </div>
 
@@ -1035,12 +1078,12 @@ function makeAudioLayer(defaultVol) {
       source = null;
     }
   }
-  function setTrack(name) {
+  function setTrack(name, fadeMs = BGM_FADE_MS) {
     // Skip only when the name is unchanged AND state already matches (playing for set, silent for null)
     if (name === currentName && (source || !name)) return;
     currentName = name;
     ensureGain();
-    const fadeSec = BGM_FADE_MS / 1000;
+    const fadeSec = fadeMs / 1000;
     const startSource = (buffer) => {
       if (currentName !== name) return;
       if (!musicEnabled) return; // toggleMusic re-arms when music turns on
@@ -1073,7 +1116,7 @@ function makeAudioLayer(defaultVol) {
       gain.gain.cancelScheduledValues(now);
       gain.gain.setValueAtTime(gain.gain.value, now);
       gain.gain.linearRampToValueAtTime(0, now + fadeSec);
-      setTimeout(swapAndStart, BGM_FADE_MS);
+      setTimeout(swapAndStart, fadeMs);
     } else {
       // No active source — start immediately (no fade-out delay)
       swapAndStart();
@@ -1088,8 +1131,8 @@ function makeAudioLayer(defaultVol) {
 
 const bgmLayer = makeAudioLayer(BGM_VOLUME);
 const bgsLayer = makeAudioLayer(BGS_VOLUME);
-function setBgm(name) { bgmLayer.setTrack(name); }
-function setBgs(name) { bgsLayer.setTrack(name); }
+function setBgm(name, fadeMs) { bgmLayer.setTrack(name, fadeMs); }
+function setBgs(name, fadeMs) { bgsLayer.setTrack(name, fadeMs); }
 const sfxBuffers = {}; // name → AudioBuffer (populated async)
 function loadSfx(name, url) {
   fetch(url).then(r => r.arrayBuffer())
@@ -2732,47 +2775,64 @@ function goBackToSelect() {
 //  to bs_listening so the cover screen feels continuous with the album itself.
 // ═══════════════════════════════════════════════════
 let _bsOnlyReturnIdx = 0; // remembers which non-BS cover (DW=0 / FA=1) to restore on exit
+// Eye-click transition: 1.5s visual fade each direction, 3s audio fade-in (intentionally
+// longer than the visual so BGM keeps building gently after the screen is fully revealed).
+const BS_EYE_FADE_MS = 1500;
+const BS_EYE_AUDIO_IN_MS = 3000;
 function enterBsOnlyMode() {
   if (animating) return;
   animating = true;
   playSelectSfx();
   // Stash the cover the user was on so exitBsOnlyMode can restore it.
   _bsOnlyReturnIdx = selectIdx;
-  // BS album's defaultBgm + defaultBgs — same audio layers as inside the album,
-  // so the cover screen feels continuous with the album itself (bs_listening + kettle hiss).
-  setBgm('bs_listening');
-  setBgs(ALBUMS.blackspace.defaultBgs ?? null);
+  // Phase 1: fade out the current BGM (BGS is null on the regular select — no-op there)
+  // along with the visual fade-to-black.
+  setBgm(null, BS_EYE_FADE_MS);
+  setBgs(null, BS_EYE_FADE_MS);
 
   const $trans = document.getElementById('scene-transition');
+  $trans.classList.add('slow-fade');
   $trans.classList.add('active');
 
   setTimeout(() => {
+    // Behind fully-black overlay: swap select content. BS BGM/BGS start from silence
+    // and fade in slowly, finishing well after the screen is back.
     document.body.classList.remove('bs-locked');
     document.body.classList.add('bs-only-select');
     selectIdx = 2; // BS index in SELECT_KEYS
-    // Force instant bg swap inside updateSelectCursor (we're behind a fully-black overlay,
-    // so the inner select-bg-fade isn't needed — and would conflict with the outer fade).
     currentSelectBg = '';
-    updateSelectCursor();
+    updateSelectCursor(); // skips BGM/BGS because bs-only-select is active
+
+    setBgm('bs_listening', BS_EYE_AUDIO_IN_MS);
+    setBgs(ALBUMS.blackspace.defaultBgs ?? null, BS_EYE_AUDIO_IN_MS);
 
     setTimeout(() => {
       $trans.classList.remove('active');
-      animating = false;
+      setTimeout(() => {
+        $trans.classList.remove('slow-fade');
+        animating = false;
+      }, BS_EYE_FADE_MS);
     }, 60);
-  }, 280);
+  }, BS_EYE_FADE_MS);
 }
 
 function exitBsOnlyMode() {
   if (animating) return;
   animating = true;
   playSelectSfx();
-  setBgm('event_maris_theme'); // back to the regular DW/FA cover BGM
-  setBgs(null);
+  // Phase 1: fade out BS audio layers along with the visual fade-to-black.
+  setBgm(null, BS_EYE_FADE_MS);
+  setBgs(null, BS_EYE_FADE_MS);
 
   const $trans = document.getElementById('scene-transition');
+  $trans.classList.add('slow-fade');
   $trans.classList.add('active');
 
   setTimeout(() => {
+    // Set the destination BGM BEFORE updateSelectCursor so its built-in setBgm() becomes
+    // a no-op (same name + source already starting). This preserves our 3s slow fade-in.
+    setBgm('event_maris_theme', BS_EYE_AUDIO_IN_MS);
+
     document.body.classList.remove('bs-only-select');
     document.body.classList.add('bs-locked');
     // Restore whichever cover (DW=0 / FA=1) the user was on before entering BS-only mode.
@@ -2782,9 +2842,12 @@ function exitBsOnlyMode() {
 
     setTimeout(() => {
       $trans.classList.remove('active');
-      animating = false;
+      setTimeout(() => {
+        $trans.classList.remove('slow-fade');
+        animating = false;
+      }, BS_EYE_FADE_MS);
     }, 60);
-  }, 280);
+  }, BS_EYE_FADE_MS);
 }
 
 // ═══════════════════════════════════════════════════
