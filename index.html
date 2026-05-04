@@ -299,7 +299,9 @@
     transition: opacity 0.3s;
     cursor: pointer;
   }
-  .page-turn-group.disabled { pointer-events: none; cursor: default; }
+  /* Disabled (at first/last page): only visual change; clicks still register so they
+     don't fall through to the viewport handler and trigger an unwanted return-to-select. */
+  .page-turn-group.disabled { cursor: default; }
   /* Key icon image (24x24 from game assets) */
   .page-key-icon {
     width: 24px; height: 24px;
@@ -1512,15 +1514,44 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Page-turn arrow clicks (disabled class removes pointer-events via CSS)
-  $pageTurnL.addEventListener('click', () => {
-    if (state !== 'browsing' || animating) return;
-    turnPage(-1);
-  });
-  $pageTurnR.addEventListener('click', () => {
-    if (state !== 'browsing' || animating) return;
-    turnPage(1);
-  });
+  // Page-turn arrows: single click = one turn; long-press (>HOLD_MS) = continuous turning.
+  // turnPage() silently no-ops at boundaries (page < 0 or >= maxPages), so this handles
+  // first/last-page edge cases without extra checks here.
+  function attachPageTurnHold(el, dir) {
+    const HOLD_MS = 100;        // delay before auto-repeat kicks in
+    const REPEAT_POLL_MS = 100; // poll interval — turnPage's animating guard handles real spacing
+    let holdTimer = null, repeatTimer = null, holdActivated = false;
+
+    const tryTurn = () => {
+      if (state !== 'browsing' || animating) return;
+      turnPage(dir); // boundary check is inside turnPage
+    };
+
+    el.addEventListener('pointerdown', () => {
+      holdActivated = false;
+      holdTimer = setTimeout(() => {
+        holdActivated = true;
+        tryTurn(); // first hold-fired turn (the initial click already fired one)
+        repeatTimer = setInterval(tryTurn, REPEAT_POLL_MS);
+      }, HOLD_MS);
+    });
+    const endHold = () => {
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      if (repeatTimer) { clearInterval(repeatTimer); repeatTimer = null; }
+    };
+    el.addEventListener('pointerup', endHold);
+    el.addEventListener('pointerleave', endHold);
+    el.addEventListener('pointercancel', endHold);
+
+    el.addEventListener('click', () => {
+      // Suppress the trailing click after a long-press so we don't add an extra turn.
+      if (holdActivated) { holdActivated = false; return; }
+      if (state !== 'browsing' || animating) return;
+      turnPage(dir);
+    });
+  }
+  attachPageTurnHold($pageTurnL, -1);
+  attachPageTurnHold($pageTurnR, 1);
 
   // Legend button clicks (hidden items don't receive pointer events)
   $legendRead.addEventListener('click', () => {
