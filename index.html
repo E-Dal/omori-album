@@ -177,9 +177,8 @@
     color: #fff; font-size: 18px; letter-spacing: 0.5px; text-align: center; line-height: 1;
     max-width: 800px; margin-top: 60px; padding: 0 24px;
   }
-  /* Show only the appropriate warning based on which select mode we're in. */
+  /* BS warning only shows on the BS-only select screen. */
   .content-warning-bs { display: none; }
-  body.bs-only-select .content-warning-default { display: none; }
   body.bs-only-select .content-warning-bs {
     display: block;
     font-size: 28px; /* bigger to feel more urgent (red bg already, no color change) */
@@ -252,7 +251,6 @@
     opacity: 0.7;
     pointer-events: none;
   }
-
   /* ── Photo thumbnails on book ── */
   .photo-slot {
     position: absolute;
@@ -352,10 +350,19 @@
     pointer-events: none;
     cursor: pointer;
   }
-  /* Eye is always present on the select screen; only the hover state surfaces it.
-     Clicking toggles bs-locked so the user can hide/show BS at any time. */
+  /* Eye is always present on the select screen; surfaced by hover (mouse) or a
+     timed tap (touch). Clicking toggles bs-locked so the user can hide/show BS. */
   body.on-select #something-corner { pointer-events: auto; }
-  body.on-select #something-corner:hover #something-eye {
+  /* Hover-only reveal — scoped to devices that actually hover, so touchscreens
+     don't get a sticky hover state from a tap. */
+  @media (hover: hover) {
+    body.on-select #something-corner:hover #something-eye {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
+  /* Touch reveal: JS adds .eye-revealed on tap and removes it after a timeout. */
+  body.on-select #something-corner.eye-revealed #something-eye {
     opacity: 1;
     pointer-events: auto;
   }
@@ -664,8 +671,7 @@
       </div>
     </div>
     <div class="select-hint">Besides clicking, you can also use Arrow keys / WASD to navigate,<br>Z / Enter to confirm, and X / Esc to cancel! (・∀・)</div>
-    <div class="content-warning content-warning-default">Content warning: this album recreates content from OMORI, which depicts themes of depression, grief, violence, and other imagery that may be distressing to some viewers. Viewer discretion advised.</div>
-    <div class="content-warning content-warning-bs">WARNING: Black Space contains graphic imagery, body horror, and explicit depictions of death — the most disturbing content in OMORI. Proceed only if you're prepared.</div>
+    <div class="content-warning content-warning-bs">WARNING: Major spoilers ahead. TRUTH ALBUM contains graphic imagery, body horror, and explicit depictions of death — the most disturbing content in OMORI. Proceed only if you're prepared.</div>
   </div>
 </div>
 
@@ -890,6 +896,10 @@ const ALBUMS = {
     selectBgm: null,         // silent on the BS cover (mari's theme fades out)
     defaultBgm: 'bs_listening',
     defaultBgs: 'amb_kettle',
+    // Photos look unreadable: hide the SHIFT-READ prompt + legend READ button. The
+    // text is still triggerable (SHIFT key, photo click, or clicking the invisible
+    // shift-read-prompt area) — just no visible cue that there's anything to read.
+    hideReadPrompt: true,
     maxPages: 4, totalPhotos: 24,
     pages: [
       [ 1, 2, 3, 4, 5, 6],
@@ -1514,6 +1524,23 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Touch reveal for the eye: tap the bottom-left corner to surface the eye for
+  // a few seconds, then it fades away. (Mouse hover is handled in CSS.)
+  const $somethingCorner = document.getElementById('something-corner');
+  if ($somethingCorner) {
+    const EYE_REVEAL_MS = 3000;
+    let eyeHideTimer = null;
+    $somethingCorner.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      $somethingCorner.classList.add('eye-revealed');
+      if (eyeHideTimer) clearTimeout(eyeHideTimer);
+      eyeHideTimer = setTimeout(() => {
+        $somethingCorner.classList.remove('eye-revealed');
+        eyeHideTimer = null;
+      }, EYE_REVEAL_MS);
+    });
+  }
+
   // Page-turn arrows: single click = one turn; long-press (>HOLD_MS) = continuous turning.
   // turnPage() silently no-ops at boundaries (page < 0 or >= maxPages), so this handles
   // first/last-page edge cases without extra checks here.
@@ -1929,7 +1956,7 @@ function updateLegend() {
     const num = photoNumAtIdx(page * 6 + cursorIdx);
     const hasText = num > 0 && photoHasText(num - 1);
     const hasPhoto = slotHasPhoto(cursorIdx);
-    $legendRead.style.visibility = hasText ? 'visible' : 'hidden';
+    $legendRead.style.visibility = (hasText && !album.hideReadPrompt) ? 'visible' : 'hidden';
     $legendView.style.visibility = hasPhoto ? 'visible' : 'hidden';
 
     // Update photo info bar with date/title (first line of first segment)
@@ -2157,7 +2184,8 @@ function startViewing() {
 
   // Show SHIFT READ prompt (index texts by photo number - 1)
   const hasTextStart = photoHasText(num - 1);
-  $shiftRead.style.opacity = hasTextStart ? '1' : '0';
+  // BS hides the visual prompt but keeps the click area active (album.hideReadPrompt).
+  $shiftRead.style.opacity = (hasTextStart && !album.hideReadPrompt) ? '1' : '0';
   $shiftRead.style.pointerEvents = hasTextStart ? '' : 'none';
   $shiftRead.classList.toggle('has-outline', album.readOutline);
 
@@ -2427,7 +2455,7 @@ function slideViewingPhoto(dir) {
 
   updateViewerArrows();
   const hasTextNew = photoHasText(num - 1);
-  const newShiftOpacity = hasTextNew ? '1' : '0';
+  const newShiftOpacity = (hasTextNew && !album.hideReadPrompt) ? '1' : '0';
   if ($shiftRead.style.opacity !== newShiftOpacity) {
     $shiftRead.style.opacity = newShiftOpacity;
   }
