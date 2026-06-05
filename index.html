@@ -5,12 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/png" href="favicon.png" sizes="108x108">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<!-- Preload the title font: first BS #24 read triggers a font fetch + parse
+     mid-typewriter which reflows the message box height. Preloading + a
+     forced document.fonts.load below get it ready before any text renders. -->
+<link rel="preload" href="assets/ui/OMORI_GAME.ttf" as="font" type="font/ttf" crossorigin>
 <title>OMORI Photo Album</title>
 <style>
   @font-face {
     font-family: 'OMORI';
     src: url('assets/ui/OMORI_GAME2.ttf') format('truetype');
   }
+  /* Title/"scratchy" font (OMORI logo style) — used for distorted segments
+     marked with effect:"distort" in album_segments.json (e.g. BS #24 ending).
+     font-display:block hides text briefly while loading instead of swapping
+     from a fallback (which would reflow the message box height mid-typewriter). */
+  @font-face {
+    font-family: 'OMORI_TITLE';
+    src: url('assets/ui/OMORI_GAME.ttf') format('truetype');
+    font-display: block;
+  }
+  .text-distort { font-family: 'OMORI_TITLE', sans-serif; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
     background: #000;
@@ -251,6 +265,15 @@
     opacity: 0.7;
     pointer-events: none;
   }
+  /* Ghost layer for DW pg2→pg3 reveal crossfade. Stacked above the live overlay
+     and fades from 0 → 0.7 during the reveal, matching the base overlay opacity. */
+  #page-text-overlay-ghost {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 1.6s ease-in-out;
+  }
   /* ── Photo thumbnails on book ── */
   .photo-slot {
     position: absolute;
@@ -331,6 +354,50 @@
   }
   /* Slow variant — used for the eye-driven BS-only transition (more deliberate, dreamy). */
   #scene-transition.slow-fade { transition: opacity 1.5s linear; }
+
+  /* ── BS final-photo jumpscare easter egg ──
+     After reading BS photo #24, freeze for 3.3s, then play SE_something_disappears +
+     mari_something_transform[3x2] sprite-sheet animation, then 5s of black, then
+     snap back to main select. */
+  #jumpscare-overlay {
+    position: fixed; inset: 0;
+    z-index: 1000;
+    display: none;
+    pointer-events: none;
+    background: #000;
+  }
+  #jumpscare-overlay.active { display: block; }
+  #jumpscare-anim {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 640px; height: 480px;
+    transform: translate(-50%, -50%) scale(var(--scale, 1));
+    transform-origin: center center;
+    background-image: url('assets/ui/mari_something_transform.png');
+    background-size: 1920px 960px;
+    background-repeat: no-repeat;
+    background-position: 0 0;
+    image-rendering: auto;
+  }
+  /* Game timing: 6 frames at 5 game-frames each (60fps) = 0.5s total, ~83ms/frame.
+     step-end holds each keyframe until the next, giving discrete frame-stepping. */
+  #jumpscare-overlay.playing #jumpscare-anim {
+    animation: mari-transform 0.5s step-end forwards;
+  }
+  @keyframes mari-transform {
+    0%     { background-position: 0 0; }
+    16.67% { background-position: -640px 0; }
+    33.33% { background-position: -1280px 0; }
+    50%    { background-position: 0 -480px; }
+    66.67% { background-position: -640px -480px; }
+    83.33% { background-position: -1280px -480px; }
+  }
+  #jumpscare-black {
+    position: absolute; inset: 0;
+    background: #000;
+    opacity: 0;
+  }
+  #jumpscare-overlay.black-cover #jumpscare-black { opacity: 1; }
 
   /* "Something" eye — bottom-left, hover to reveal, click to toggle BS visibility */
   #something-corner {
@@ -414,7 +481,12 @@
     display: none;
     overflow: hidden;
   }
-  #page-flip canvas {
+  /* Snapshot canvas carries only book-bg + page-text overlay (thumbnails are
+     separate <img> layers — see captureHalfPage). Keep pixel-art sampling so
+     the bg matches the still-live #book-bg next to it and there's no perceived
+     "book shift" the moment the flip overlay appears. */
+  #page-flip canvas,
+  #page-static-cover canvas {
     image-rendering: pixelated;
   }
 
@@ -621,6 +693,10 @@
 </svg>
 
 <div id="scene-transition" class="active"></div>
+<div id="jumpscare-overlay" aria-hidden="true">
+  <div id="jumpscare-anim"></div>
+  <div id="jumpscare-black"></div>
+</div>
 <div id="parallax-bg"></div>
 <div id="parallax-fg"></div>
 
@@ -670,7 +746,7 @@
         <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
       </div>
     </div>
-    <div class="select-hint">Besides clicking, you can also use Arrow keys / WASD to navigate,<br>Z / Enter to confirm, and X / Esc to cancel! (・∀・)</div>
+    <div class="select-hint">Besides clicking, you can also use Arrow keys / WASD to navigate,<br>Z / Enter to confirm, and X / Esc to cancel, just like the game! (・∀・)</div>
     <div class="content-warning content-warning-bs">WARNING: Major spoilers ahead. TRUTH ALBUM contains graphic imagery, body horror, and explicit depictions of death — the most disturbing content in OMORI. Proceed only if you're prepared.</div>
   </div>
 </div>
@@ -709,6 +785,10 @@
     <div id="album-book">
       <img id="book-bg" src="" alt="">
       <img id="page-text-overlay" src="" alt="">
+      <!-- Ghost overlay used to crossfade DW page-2 text from pg2 to pg3 when
+           the clear-photo egg fires. Hidden by default, faded in over the live
+           overlay during the reveal, then cleaned up. -->
+      <img id="page-text-overlay-ghost" src="" alt="">
       <div id="photo-slots"></div>
       <div id="page-flip"></div>
       <div id="page-static-cover" style="position:absolute;top:0;z-index:4;display:none;pointer-events:none;overflow:hidden;"></div>
@@ -834,8 +914,15 @@ const ALBUMS = {
       [37,38,39,40,41,42],[43,44,45,46,47,48],
     ],
     texts: null,
-    stages: ['INITIAL', 'MARI BACK', '+TREEHOUSE', 'SCRIBBLED'],
+    stages: ['FULL ALBUM', 'INITIAL', 'MARI BACK', 'SCRIBBLED'],
     stageData: [
+      // FULL ALBUM: full 48 (Mari + Treehouse both present)
+      { maxPages: 8, totalPhotos: 48, bgm: 'fat_treehouse', pages: [
+        [1,2,3,4,5,6],[7,8,9,10,11,12],
+        [13,14,15,16,17,18],[19,20,21,22,23,24],
+        [25,26,27,28,29,30],[31,32,33,34,35,36],
+        [37,38,39,40,41,42],[43,44,45,46,47,48],
+      ]},
       // INITIAL: Mari (22 photos) + Treehouse (37) hidden as empty slots
       { maxPages: 8, totalPhotos: 48, bgm: 'theme_basil2', pages: [
         [ 1, 0, 0, 4, 5, 0],
@@ -853,13 +940,6 @@ const ALBUMS = {
         [13,14,15,16,17,18],[19,20,21,22,23,24],
         [25,26,27,28,29,30],[31,32,33,34,35,36],
         [0,38,39,40,41,42],[43,44,45,46,47,48],
-      ]},
-      // +TREEHOUSE: full 48
-      { maxPages: 8, totalPhotos: 48, bgm: 'fat_treehouse', pages: [
-        [1,2,3,4,5,6],[7,8,9,10,11,12],
-        [13,14,15,16,17,18],[19,20,21,22,23,24],
-        [25,26,27,28,29,30],[31,32,33,34,35,36],
-        [37,38,39,40,41,42],[43,44,45,46,47,48],
       ]},
       // SCRIBBLED: same layout as INITIAL but uses scribbled variants — silent
       {
@@ -922,11 +1002,30 @@ const SELECT_KEYS = ['dreamworld', 'faraway', 'blackspace'];
 // Session-only (resets on refresh so you can always see the "original" album).
 let easterEgg12Discovered = false;
 let justDiscoveredEgg = false;   // one-shot flag for fade-in animation
+// BS final-photo jumpscare: once-per-session so it lands hard the first time
+// and doesn't get annoying on re-reads of #24.
+let bsJumpscareTriggered = false;
+// DW clear-photo (#13) reveal: hidden read prompt on POST-RESET/CONSOLE slot 11
+// until the user reads it once. Triggers a pg2→pg3 text crossfade on zoom exit,
+// then page-2 text stays as pg3 for the rest of the session in both stages.
+let dwClearRevealed = false;
+let dwPendingReveal = false;     // armed when user reads #13 pre-reveal; consumed on zoom exit
+let dwCrossfading = false;       // input lockout while pg2→pg3 crossfade is running
 
 function isDW12Hidden() {
   return album === ALBUMS.dreamworld
       && stageIdx.dreamworld === 0
       && !easterEgg12Discovered;
+}
+
+// Photo #13 (clear group) at slot 11 of POST-RESET/CONSOLE — hide read prompt
+// until the reveal happens. Per-photo (not whole stage), so the rest of the
+// album behaves normally.
+function isDWClearReadHidden(num) {
+  return album === ALBUMS.dreamworld
+      && (stageIdx.dreamworld === 1 || stageIdx.dreamworld === 2)
+      && num === 13
+      && !dwClearRevealed;
 }
 
 // Load segmented text data
@@ -1163,11 +1262,12 @@ function playSfxBuffer(name, volume = 0.9) {
   gain.connect(audioCtx.destination);
   source.start(0);
 }
-loadSfx('pageTurn', 'assets/audio/SE_turn_page.ogg');
-loadSfx('cursor',   'assets/audio/sys_cursor1.ogg');
-loadSfx('select',   'assets/audio/SYS_select.ogg');
-loadSfx('cancel',   'assets/audio/sys_cancel.ogg');
-loadSfx('buzzer',   'assets/audio/sys_buzzer.ogg');
+loadSfx('pageTurn',  'assets/audio/SE_turn_page.ogg');
+loadSfx('cursor',    'assets/audio/sys_cursor1.ogg');
+loadSfx('select',    'assets/audio/SYS_select.ogg');
+loadSfx('cancel',    'assets/audio/sys_cancel.ogg');
+loadSfx('buzzer',    'assets/audio/sys_buzzer.ogg');
+loadSfx('jumpscare', 'assets/audio/SE_something_disappears.ogg');
 const playPageTurnSfx = () => playSfxBuffer('pageTurn');
 const playCursorSfx   = () => playSfxBuffer('cursor');
 const playSelectSfx   = () => playSfxBuffer('select');
@@ -1208,6 +1308,7 @@ const $legendView = document.getElementById('legend-view');
 const $book = document.getElementById('album-book');
 const $bookBg = document.getElementById('book-bg');
 const $pageOverlay = document.getElementById('page-text-overlay');
+const $pageOverlayGhost = document.getElementById('page-text-overlay-ghost');
 const $slots = document.getElementById('photo-slots');
 const $cursor = document.getElementById('hand-cursor');
 const $pageTurnL = document.getElementById('page-turn-left');
@@ -1231,6 +1332,13 @@ window.addEventListener('DOMContentLoaded', () => {
   drawKeyIcons();
   updateSelectCursor(); // Set initial select background
   updateStageRollers();
+  // Force-parse the distort font right away so the first BS #24 read doesn't
+  // pay font-load latency mid-message (which reflows the box). The <link
+  // rel="preload"> fetches the bytes; this triggers the actual font parse +
+  // shaper init so it's hot in cache by the time anyone reads photo #24.
+  if (document.fonts && document.fonts.load) {
+    document.fonts.load('28px OMORI_TITLE').catch(() => {});
+  }
   // Preload all background images (with promises for waiting)
   ['assets/ui/Faraway_polaroidBG_FA_day.png',
    'assets/ui/Dreamworld_polaroidBG_FA_day.png',
@@ -1894,7 +2002,15 @@ function openAlbum(key) {
 // ═══════════════════════════════════════════════════
 function renderPage() {
   $slots.innerHTML = '';
-  $pageOverlay.src = `${album.pageTextPrefix}${page + 1}.png`;
+  // DW POST-RESET/CONSOLE: page 2 text swaps to dream_pg3 once the clear-photo
+  // egg has been triggered (persistent for the session, both stages share state).
+  const dwClearPageSwap = album === ALBUMS.dreamworld
+      && (stageIdx.dreamworld === 1 || stageIdx.dreamworld === 2)
+      && page === 1
+      && dwClearRevealed;
+  $pageOverlay.src = dwClearPageSwap
+      ? `${album.pageTextPrefix}3.png`
+      : `${album.pageTextPrefix}${page + 1}.png`;
 
   const photos = album.pages[page] || [];
   photos.forEach((num, i) => {
@@ -1936,6 +2052,55 @@ function renderPage() {
   });
 }
 
+// DW clear-photo reveal: crossfade page-2 text from dream_pg2 → dream_pg3.
+// Live overlay (pg2) fades out while ghost (pg3) fades in over 1.6s, then we
+// swap the live src to pg3 and reset the ghost. If we're not on page 2 when
+// the reveal fires (user navigated away in zoom mode and exits to a different
+// page), skip the animation — renderPage will pick up pg3 from the flag.
+function crossfadeDWPageText() {
+  const pg3Src = `${ALBUMS.dreamworld.pageTextPrefix}3.png`;
+  // Only play the crossfade if the user was already on page 2 in browse mode
+  // before entering zoom — that's when they actually had pg2 on screen and the
+  // dissolve makes narrative sense. Otherwise renderPage will hard-swap to pg3.
+  const onTargetPage = album === ALBUMS.dreamworld && page === 1;
+  if (!onTargetPage) return;
+
+  // Lock input + cursor bob for the whole crossfade — operating mid-fade
+  // (page flip, re-enter zoom, etc) corrupts the swap.
+  dwCrossfading = true;
+  animating = true;
+  cursorBobPaused = true;
+
+  $pageOverlayGhost.src = pg3Src;
+  $pageOverlayGhost.offsetHeight;  // flush layout so transition triggers
+  $pageOverlay.style.transition = 'opacity 1.6s ease-in-out';
+  $pageOverlay.style.opacity = '0';
+  $pageOverlayGhost.style.opacity = '0.7';
+
+  setTimeout(() => {
+    // Restore live overlay opacity, hide ghost, and swap src to pg3 only if
+    // we're still showing page 2 of DW (renderPage handles the rest otherwise).
+    $pageOverlay.style.transition = 'none';
+    $pageOverlay.style.opacity = '0.7';
+    if (album === ALBUMS.dreamworld && page === 1) {
+      $pageOverlay.src = pg3Src;
+    }
+    $pageOverlayGhost.style.transition = 'none';
+    $pageOverlayGhost.style.opacity = '0';
+    $pageOverlay.offsetHeight;
+    $pageOverlayGhost.offsetHeight;
+    $pageOverlay.style.transition = '';
+    $pageOverlayGhost.style.transition = '';
+    // Release the input lockout. If endViewing's own 500ms cleanup already
+    // ran and was deferred (see guard there), it left cursor.inactive on too;
+    // drop it now along with animating/cursorBobPaused.
+    dwCrossfading = false;
+    animating = false;
+    cursorBobPaused = false;
+    $cursor.classList.remove('inactive');
+  }, 1650);
+}
+
 // ═══════════════════════════════════════════════════
 //  Cursor Position
 // ═══════════════════════════════════════════════════
@@ -1956,7 +2121,8 @@ function updateLegend() {
     const num = photoNumAtIdx(page * 6 + cursorIdx);
     const hasText = num > 0 && photoHasText(num - 1);
     const hasPhoto = slotHasPhoto(cursorIdx);
-    $legendRead.style.visibility = (hasText && !album.hideReadPrompt) ? 'visible' : 'hidden';
+    const readHidden = album.hideReadPrompt || isDWClearReadHidden(num);
+    $legendRead.style.visibility = (hasText && !readHidden) ? 'visible' : 'hidden';
     $legendView.style.visibility = hasPhoto ? 'visible' : 'hidden';
 
     // Update photo info bar with date/title (first line of first segment)
@@ -1967,30 +2133,48 @@ function updateLegend() {
 // ═══════════════════════════════════════════════════
 //  Page Turning (with animation)
 // ═══════════════════════════════════════════════════
-// Capture a half-page (left or right) to a canvas, including book bg, text overlay, and photos
-function captureHalfPage(side) {
+// Build a layered half-page snapshot directly into $container: book-bg +
+// page-text on a pixelated canvas (matches the live #book-bg sampling), with
+// photo thumbnails as separate smooth <img> overlays on top.
+//
+// Why split: a single canvas can only carry one image-rendering mode. If
+// `pixelated`, thumbnails inside it sample as nearest-neighbor and look gritty
+// vs. the smooth live thumbnails. If `auto`, the book-bg pixel art interpolates
+// differently than the still-pixelated live #book-bg, and the user perceives
+// a "book shift" the instant the flip overlay appears.
+//
+// Appending the layers directly to $container (instead of into a wrapper div)
+// avoids any flow/baseline interactions — the layers are absolute children of
+// the already-absolutely-positioned $container and share its origin.
+function captureHalfPageInto($container, side) {
   const bookW = $bookBg.naturalWidth;
   const bookH = $bookBg.naturalHeight;
   const halfW = Math.floor(bookW / 2);
   const sx = side === 0 ? 0 : halfW;
 
+  // Bottom layer: book bg + text overlay on a pixelated canvas.
   const canvas = document.createElement('canvas');
   canvas.width = halfW;
   canvas.height = bookH;
+  canvas.style.position = 'absolute';
+  canvas.style.left = '0';
+  canvas.style.top = '0';
+  canvas.style.width = halfW + 'px';
+  canvas.style.height = bookH + 'px';
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
 
-  // Draw book background (cropped half)
   ctx.drawImage($bookBg, sx, 0, halfW, bookH, 0, 0, halfW, bookH);
-
-  // Draw page text overlay (cropped half)
   if ($pageOverlay.naturalWidth) {
     ctx.globalAlpha = 0.7;
     ctx.drawImage($pageOverlay, sx, 0, halfW, bookH, 0, 0, halfW, bookH);
     ctx.globalAlpha = 1.0;
   }
+  $container.appendChild(canvas);
 
-  // Draw photo thumbnails from DOM
+  // Top layer: live thumbnail <img> clones, smoothly rendered. Positioned at
+  // SLOT_POS minus the half offset so they share book-relative coords with
+  // $container.left (= sx).
   const slotImgs = $slots.querySelectorAll('.photo-slot img');
   const photos = album.pages[page] || [];
   const startSlot = side === 0 ? 0 : 3;
@@ -2003,13 +2187,20 @@ function captureHalfPage(side) {
       const imgEl = slotImgs[imgIdx];
       if (imgEl && imgEl.complete) {
         const pos = SLOT_POS[i];
-        ctx.drawImage(imgEl, pos.x - sx, pos.y, 86, 101);
+        const thumb = document.createElement('img');
+        thumb.src = imgEl.src;
+        thumb.style.position = 'absolute';
+        thumb.style.left = (pos.x - sx) + 'px';
+        thumb.style.top = pos.y + 'px';
+        thumb.style.width = '86px';
+        thumb.style.height = '101px';
+        thumb.style.imageRendering = 'auto';
+        thumb.style.pointerEvents = 'none';
+        $container.appendChild(thumb);
       }
     }
     imgIdx++;
   }
-
-  return canvas;
 }
 
 function waitForPageImages() {
@@ -2039,34 +2230,27 @@ function turnPage(dir) {
   const bookW = $bookBg.naturalWidth;
   const halfW = Math.floor(bookW / 2);
 
-  // Capture BOTH halves of old page before switching
-  const oldFlipCanvas = captureHalfPage(dir > 0 ? 1 : 0);
-  const oldStaticCanvas = captureHalfPage(dir > 0 ? 0 : 1);
-
   // Put covers on FIRST (before switching content) to prevent flash
   const $cover = document.getElementById('page-static-cover');
 
-  // Cover the non-flipping side with old content
+  // Cover the non-flipping side with old content. Set dims + position FIRST
+  // so the snapshot lands at the right book-relative coords.
   $cover.innerHTML = '';
-  $cover.appendChild(oldStaticCanvas);
-  oldStaticCanvas.style.width = halfW + 'px';
-  oldStaticCanvas.style.height = '100%';
   $cover.style.left = (dir > 0 ? '0px' : halfW + 'px');
   $cover.style.width = halfW + 'px';
   $cover.style.height = '100%';
   $cover.style.display = 'block';
+  captureHalfPageInto($cover, dir > 0 ? 0 : 1);
 
   // Setup flip overlay with old flipping side
   $flip.innerHTML = '';
-  $flip.appendChild(oldFlipCanvas);
-  oldFlipCanvas.style.width = halfW + 'px';
-  oldFlipCanvas.style.height = '100%';
   $flip.style.left = (dir > 0 ? halfW + 'px' : '0px');
   $flip.style.width = halfW + 'px';
   $flip.style.transformOrigin = (dir > 0 ? 'left center' : 'right center');
   $flip.style.display = 'block';
   $flip.style.transform = 'scaleX(1)';
   $flip.style.background = 'none';
+  captureHalfPageInto($flip, dir > 0 ? 1 : 0);
 
   // NOW switch content underneath (hidden by covers)
   page = newPage;
@@ -2076,7 +2260,6 @@ function turnPage(dir) {
   waitForPageImages().then(() => {
     requestAnimationFrame(() => {
     const newSide = dir > 0 ? 0 : 1;
-    const newCanvas = captureHalfPage(newSide);
 
     let frame = 0;
     // Snappier than game's 20+15: 12+8 (0.33s total) for crisper turn feel
@@ -2091,12 +2274,8 @@ function turnPage(dir) {
         const t = frame / phase1Frames;
         $flip.style.transform = `scaleX(${1 - easeOutCirc(t)})`;
       } else if (frame === phase1Frames + 1) {
-        // Switch to new page canvas
+        // Switch to new page snapshot
         $flip.innerHTML = '';
-        $flip.appendChild(newCanvas);
-        newCanvas.style.width = halfW + 'px';
-        newCanvas.style.height = '100%';
-
         if (dir > 0) {
           $flip.style.left = '0px';
           $flip.style.transformOrigin = 'right center';
@@ -2105,6 +2284,7 @@ function turnPage(dir) {
           $flip.style.transformOrigin = 'left center';
         }
         $flip.style.transform = 'scaleX(0)';
+        captureHalfPageInto($flip, newSide);
       } else if (frame <= phase1Frames + phase2Frames + 1) {
         const t = (frame - phase1Frames - 1) / phase2Frames;
         $flip.style.transform = `scaleX(${easeOutCirc(t)})`;
@@ -2185,7 +2365,9 @@ function startViewing() {
   // Show SHIFT READ prompt (index texts by photo number - 1)
   const hasTextStart = photoHasText(num - 1);
   // BS hides the visual prompt but keeps the click area active (album.hideReadPrompt).
-  $shiftRead.style.opacity = (hasTextStart && !album.hideReadPrompt) ? '1' : '0';
+  // DW #13 (POST-RESET/CONSOLE) does the same per-photo until revealed.
+  const readHiddenStart = album.hideReadPrompt || isDWClearReadHidden(num);
+  $shiftRead.style.opacity = (hasTextStart && !readHiddenStart) ? '1' : '0';
   $shiftRead.style.pointerEvents = hasTextStart ? '' : 'none';
   $shiftRead.classList.toggle('has-outline', album.readOutline);
 
@@ -2304,6 +2486,16 @@ function endViewing() {
     easterEgg12Discovered = true;
   }
 
+  // DW clear-photo reveal: armed in closeMessage when user reads #13 in zoom mode
+  // on POST-RESET/CONSOLE. Crossfade page-2 text dream_pg2 → dream_pg3 now and
+  // flip the persistent flag so both stages stay revealed for the rest of the session.
+  const revealingDWClear = dwPendingReveal;
+  if (revealingDWClear) {
+    dwPendingReveal = false;
+    dwClearRevealed = true;
+    crossfadeDWPageText();
+  }
+
   // Game: photo exit 15 frames (0.25s), easeInCirc
   $viewerPhoto.style.transition = 'transform 0.25s var(--ease-in-circ), opacity 0.25s var(--ease-in-circ)';
   // Game: photo exits back down to top edge at scene bottom
@@ -2366,10 +2558,14 @@ function endViewing() {
   setTimeout(() => {
     $viewer.classList.remove('active');
     updateCursor();
-    // Cursor fully back: drop gray tint, resume bobbing
-    $cursor.classList.remove('inactive');
-    animating = false;
-    cursorBobPaused = false;
+    // If the DW pg2→pg3 crossfade is still running, leave input locked +
+    // cursor grayed; the crossfade's own setTimeout will release everything
+    // when the dissolve finishes.
+    if (!dwCrossfading) {
+      $cursor.classList.remove('inactive');
+      animating = false;
+      cursorBobPaused = false;
+    }
     // Trigger fade-in rerender of the unlocked easter egg thumbnail
     if (discoveringEgg) {
       justDiscoveredEgg = true;
@@ -2423,7 +2619,10 @@ function slideViewingPhoto(dir) {
   oldImg.style.left = '50%';
   oldImg.style.top = '50%';
   oldImg.style.zIndex = '36';
-  oldImg.style.imageRendering = 'pixelated';
+  // Match #viewer-photo's smooth rendering. Without this the cloned <img> falls
+  // back to the global `img { image-rendering: pixelated }` rule and the
+  // fading-out photo snaps to pixel sampling the instant the slide starts.
+  oldImg.style.imageRendering = 'auto';
   // Game: old photo fade 25 frames (0.42s) easeInCirc
   oldImg.style.setProperty('transition', 'opacity 0.42s cubic-bezier(0.55, 0, 1, 0.45)', 'important');
   $viewer.appendChild(oldImg);
@@ -2455,7 +2654,8 @@ function slideViewingPhoto(dir) {
 
   updateViewerArrows();
   const hasTextNew = photoHasText(num - 1);
-  const newShiftOpacity = (hasTextNew && !album.hideReadPrompt) ? '1' : '0';
+  const readHiddenNew = album.hideReadPrompt || isDWClearReadHidden(num);
+  const newShiftOpacity = (hasTextNew && !readHiddenNew) ? '1' : '0';
   if ($shiftRead.style.opacity !== newShiftOpacity) {
     $shiftRead.style.opacity = newShiftOpacity;
   }
@@ -2587,9 +2787,15 @@ function typewriteLine() {
   document.getElementById('message-continue').style.opacity = '0';
 
   // Skip mode: once user skipped, show lines instantly (no typewriter)
+  // Per-segment style wrap (e.g. effect:"distort" → OMORI_TITLE font). Leading
+  // inline space stays outside the span so it inherits the base font.
+  const wrap = entry.effect
+    ? (s) => `<span class="text-${entry.effect}">${s}</span>`
+    : (s) => s;
+
   if (msgSkipMode) {
     const prefix = isInline && msgPrevLines ? ' ' : '';
-    const fullLine = msgPrevLines + prefix + text.replace(/\n/g, '<br>');
+    const fullLine = msgPrevLines + prefix + wrap(text.replace(/\n/g, '<br>'));
     $msgText.innerHTML = fullLine;
     msgPrevLines = fullLine;
     const nextEntry = msgLineIdx + 1 < box.length ? box[msgLineIdx + 1] : null;
@@ -2627,10 +2833,13 @@ function typewriteLine() {
     if (msgHoldFast) chunkIdx = chunks.length;
     else chunkIdx += charsPerFrame;
     if (chunkIdx > chunks.length) chunkIdx = chunks.length;
-    // Show visible part + invisible remainder (preserves word-wrap positions)
+    // Show visible part + invisible remainder (preserves word-wrap positions).
+    // Both halves get the same effect wrap so the styled font's metrics drive
+    // word-wrap from the start (otherwise the hidden remainder would lay out
+    // in the base font and shift as it reveals).
     const visible = chunks.slice(0, chunkIdx).join('');
     const hidden = chunks.slice(chunkIdx).join('');
-    $msgText.innerHTML = prefix + visible + '<span style="visibility:hidden">' + hidden + '</span>';
+    $msgText.innerHTML = prefix + wrap(visible) + '<span style="visibility:hidden">' + wrap(hidden) + '</span>';
 
     // Play text blip
     blipCounter += charsPerFrame;
@@ -2646,7 +2855,7 @@ function typewriteLine() {
       const separator = isInline ? ' ' : '<br>';
       const renderedText = text.replace(/\n/g, '<br>');
       const inlineSpace = (isInline && prefix) ? ' ' : '';
-      msgPrevLines = prefix + inlineSpace + renderedText;
+      msgPrevLines = prefix + inlineSpace + wrap(renderedText);
       // Only add <br> if next entry exists and is not inline
       const nextEntry = msgLineIdx + 1 < box.length ? box[msgLineIdx + 1] : null;
       if (nextEntry && !nextEntry.inline) {
@@ -2675,7 +2884,10 @@ function advanceMessage() {
     const text = entry.text;
     const isInline = entry.inline;
     const prefix = isInline && msgPrevLines ? ' ' : '';
-    const fullLine = msgPrevLines + prefix + text.replace(/\n/g, '<br>');
+    const wrap = entry.effect
+      ? (s) => `<span class="text-${entry.effect}">${s}</span>`
+      : (s) => s;
+    const fullLine = msgPrevLines + prefix + wrap(text.replace(/\n/g, '<br>'));
     $msgText.innerHTML = fullLine;
     msgPrevLines = fullLine;
     const nextEntry = msgLineIdx + 1 < box.length ? box[msgLineIdx + 1] : null;
@@ -2722,6 +2934,30 @@ function closeMessage() {
   msgSkipMode = false; // reset skip mode for next message
   msgPauseActive = false;
 
+  // Easter egg: closing the read-message for BS photo #24 triggers a delayed jumpscare.
+  // Only fires from zoom (viewing) mode — triggering from browsing mode would cut
+  // straight from a small thumbnail to a full-screen scare and feel too jarring.
+  // Detect here (while we still know what's on-screen) and arm. Fires once per session.
+  const justReadPhoto = (messageReturnTo === 'viewing')
+    ? photoNumAtIdx(viewingIdx)
+    : photoNumAtIdx(page * 6 + cursorIdx);
+  const triggerJumpscare = (
+    album === ALBUMS.blackspace
+    && messageReturnTo === 'viewing'
+    && justReadPhoto === 24
+    && !bsJumpscareTriggered
+  );
+  if (triggerJumpscare) bsJumpscareTriggered = true;
+
+  // DW #13 (POST-RESET/CONSOLE) — arm reveal if user just read the clear photo
+  // while in zoom mode. The actual pg2→pg3 crossfade fires when they exit zoom
+  // (endViewing), not now.
+  if (messageReturnTo === 'viewing'
+      && justReadPhoto === 13
+      && isDWClearReadHidden(13)) {
+    dwPendingReveal = true;
+  }
+
   // Clear text first, then play close animation
   $msgText.innerHTML = '';
   document.getElementById('message-continue').style.opacity = '0';
@@ -2767,8 +3003,96 @@ function closeMessage() {
         $pageTurnL.style.opacity = '';
         $pageTurnR.style.opacity = '';
       }, 100);
+    } else if (triggerJumpscare) {
+      // Viewing (zoom) mode — no book slide-back, trigger directly after message close.
+      startBsJumpscare();
     }
   }, 130);
+}
+
+// ═══════════════════════════════════════════════════
+//  BS final-photo jumpscare easter egg.
+//  Original game (Map318.json event 6): 200-frame wait → SE_something_disappears +
+//  mari_something_transform[3x2] sprite animation → fade to black. We extend with a
+//  5s black hold and a snap back to the main select to give a clean "ejection" feel.
+// ═══════════════════════════════════════════════════
+function startBsJumpscare() {
+  animating = true;
+  const $js = document.getElementById('jumpscare-overlay');
+
+  setTimeout(() => {
+    // Cut BS BGM + BGS right as the scare hits — kettle/listening stays through the
+    // 3s wait, then snaps silent so SE_something_disappears lands clean. Short fade
+    // (100ms) avoids a click without bleeding music into the scare.
+    setBgm(null, 100);
+    setBgs(null, 100);
+    playSfxBuffer('jumpscare', 0.9);
+    $js.classList.add('active', 'playing');
+    setTimeout(() => {
+      // Animation finished (one cycle of 6 frames) → instant black cover.
+      $js.classList.add('black-cover');
+      setTimeout(() => {
+        snapToSelectScreen();
+        // Tear down the overlay on the next frame, after select-screen UI is in place.
+        requestAnimationFrame(() => {
+          $js.classList.remove('active', 'playing', 'black-cover');
+          animating = false;
+        });
+      }, 5000);
+    }, 500);
+  }, 3000);
+}
+
+function snapToSelectScreen() {
+  // Instant version of goBackToSelect — no SFX, no fade (the jumpscare's black overlay
+  // is doing the covering). Mirrors the inner state-swap block of goBackToSelect.
+  // After the jumpscare, return to the regular 3-album select with BS hidden again
+  // (re-lock BS, drop bs-only-select, restore the pre-BS cursor position).
+  document.body.classList.remove('bs-only-select');
+  document.body.classList.add('bs-locked');
+  selectIdx = (_bsOnlyReturnIdx >= 0 && _bsOnlyReturnIdx <= 1) ? _bsOnlyReturnIdx : 0;
+
+  const sel = ALBUMS[SELECT_KEYS[selectIdx]];
+  setBgm('selectBgm' in sel ? sel.selectBgm : 'event_maris_theme');
+  setBgs(null);
+
+  state = 'select';
+  document.body.classList.add('on-select');
+  document.body.classList.remove('in-album');
+  updateScale();
+  album = null;
+  $viewport.style.display = 'none';
+  $viewer.classList.remove('active');
+  $cursor.style.display = 'none';
+  $photoInfo.style.display = 'none';
+  $select.style.display = 'flex';
+  document.getElementById('select-bg').style.display = '';
+  document.getElementById('select-gif').style.display = '';
+  currentSelectBg = '';
+  updateSelectCursor();
+  $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.png')`;
+  $parallax.style.backgroundPosition = '0 0';
+
+  // The jumpscare can fire from viewing (zoom) mode, skipping the normal endViewing
+  // cleanup. Clear any inline transform/opacity that startViewing or closeMessage left
+  // behind on book/cursor/page-turn arrows/legend so the next album entry isn't stuck
+  // with these elements slid off-screen at opacity 0.
+  $book.style.transform = '';
+  $book.style.opacity = '';
+  $book.style.transition = '';
+  $cursor.classList.remove('inactive');
+  $cursor.style.transform = '';
+  $cursor.style.opacity = '';
+  $cursor.style.transition = '';
+  cursorBobPaused = false;
+  $pageTurnL.style.transform = '';
+  $pageTurnR.style.transform = '';
+  $pageTurnL.style.opacity = '';
+  $pageTurnR.style.opacity = '';
+  $pageTurnL.style.transition = '';
+  $pageTurnR.style.transition = '';
+  $legend.style.transform = '';
+  $legend.style.opacity = '';
 }
 
 // ═══════════════════════════════════════════════════
@@ -2814,11 +3138,26 @@ function goBackToSelect() {
     $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.png')`;
     $parallax.style.backgroundPosition = '0 0';
     // Don't clear parallax-fg — keep it loaded/cached to avoid repaint delay next time
-    // Reset book transforms
+    // Wipe any inline transform/opacity/transition left behind on the book +
+    // cursor + page-turn arrows + legend before the next album opens. Same
+    // cleanup as snapToSelectScreen — DW crossfade or aborted animations can
+    // otherwise leak opacity:0 / translateY into the next album entry.
     $book.style.transform = '';
     $book.style.opacity = '1';
+    $book.style.transition = '';
+    $cursor.classList.remove('inactive');
+    $cursor.style.transform = '';
+    $cursor.style.opacity = '';
+    $cursor.style.transition = '';
+    cursorBobPaused = false;
     $pageTurnL.style.transform = '';
     $pageTurnR.style.transform = '';
+    $pageTurnL.style.opacity = '';
+    $pageTurnR.style.opacity = '';
+    $pageTurnL.style.transition = '';
+    $pageTurnR.style.transition = '';
+    $legend.style.transform = '';
+    $legend.style.opacity = '';
 
     // Fade back in once we're behind the black overlay
     setTimeout(() => {

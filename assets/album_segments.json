@@ -1835,8 +1835,17 @@
           "inline": false
         },
         {
-          "text": "You just... shouldn't... have looked...",
+          "text": "You just...",
           "inline": false
+        },
+        {
+          "text": "shouldn't...",
+          "inline": true
+        },
+        {
+          "text": "have looked...",
+          "inline": true,
+          "effect": "distort"
         }
       ]
     ]
