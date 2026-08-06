@@ -51,6 +51,8 @@
     pointer-events: none;
   }
   body.on-select #site-footer { display: block; }
+  /* ...but not on the secret TRUTH ALBUM (BlackSpace-only) select screen. */
+  body.bs-only-select #site-footer { display: none; }
 
   /* ── Pixel-art rendering ── */
   img, canvas { image-rendering: pixelated; }
