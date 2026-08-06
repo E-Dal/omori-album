@@ -1375,13 +1375,59 @@ window.addEventListener('DOMContentLoaded', () => {
   startLoop();
   $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.png')`;
 
+  // 开场就把所有相册的缩略图（很小，约 1.5MB）拉进浏览器缓存，翻页时不再有小卡顿。
+  preloadAllThumbnails();
+
   // Fade in from black once page is ready
   window.addEventListener('load', () => {
     setTimeout(() => {
       document.getElementById('scene-transition').classList.remove('active');
     }, 200);
+    // 大图体量大（约 31MB），不塞进开场黑屏里等；等页面 load 完、浏览器空闲时再一张张
+    // 低优先级预取，让查看模式翻大图也基本命中缓存，又不跟首屏资源抢带宽。
+    preloadAllFullsizeIdle();
   });
 });
+
+// 枚举所有相册、所有 stage 会用到的照片 URL（缩略图或大图）。stage 会覆盖前缀/后缀，
+// 所以逐个 stage 解析、去重后返回。kind: 'thumb' | 'full'。
+function collectAllPhotoUrls(kind) {
+  const urls = new Set();
+  for (const key of Object.keys(ALBUMS)) {
+    const a = ALBUMS[key];
+    const stages = (a.stageData && a.stageData.length) ? a.stageData : [{}];
+    for (const sd of stages) {
+      const prefix = kind === 'thumb' ? (sd.thumbPrefix ?? a.thumbPrefix) : (sd.fullPrefix ?? a.fullPrefix);
+      const suffix = kind === 'thumb' ? (sd.thumbSuffix ?? a.thumbSuffix ?? '') : (sd.fullSuffix ?? a.fullSuffix ?? '');
+      const pages = sd.pages || a.pages || [];
+      for (const pg of pages) {
+        for (const num of pg) {
+          if (!num) continue;
+          const nn = String(num).padStart(2, '0');
+          // 大图 URL 必须带上 ?v=2，跟 fullUrl() 完全一致，否则缓存 key 不同、等于白预加载。
+          urls.add(kind === 'thumb' ? `${prefix}${nn}${suffix}.png` : `${prefix}${nn}${suffix}.png?v=2`);
+        }
+      }
+    }
+  }
+  return [...urls];
+}
+
+function preloadAllThumbnails() {
+  for (const src of collectAllPhotoUrls('thumb')) new Image().src = src;
+}
+
+function preloadAllFullsizeIdle() {
+  const urls = collectAllPhotoUrls('full');
+  let i = 0;
+  const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 200));
+  const step = () => {
+    if (i >= urls.length) return;
+    new Image().src = urls[i++];
+    idle(step);
+  };
+  idle(step);
+}
 
 let arrowImgRed = null;
 let arrowImgWhite = null;
