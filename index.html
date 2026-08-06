@@ -35,6 +35,23 @@
     font-family: 'OMORI', sans-serif;
   }
 
+  /* ── Site footer credit ── */
+  #site-footer {
+    display: none;
+    position: fixed;
+    left: 0; right: 0; bottom: 5px;
+    z-index: 998;
+    padding: 6px 10px;
+    text-align: center;
+    font-family: 'OMORI', sans-serif;
+    font-size: 15px;
+    letter-spacing: 1px;
+    color: #fff;
+    background: transparent;
+    pointer-events: none;
+  }
+  body.on-select #site-footer { display: block; }
+
   /* ── Pixel-art rendering ── */
   img, canvas { image-rendering: pixelated; }
   /* Photos contain hand-drawn detail, not crisp pixel art — pixelated at fractional
@@ -3387,6 +3404,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 </script>
+<footer id="site-footer">Fan project · Art by u/MrMissingNoProdigy · OMORI © OMOCAT, LLC</footer>
 <script data-goatcounter="https://e-dal.goatcounter.com/count"
         async src="//gc.zgo.at/count.js"></script>
 </body>
