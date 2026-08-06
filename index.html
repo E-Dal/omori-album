@@ -1021,6 +1021,7 @@ const SELECT_KEYS = ['dreamworld', 'faraway', 'blackspace'];
 // Session-only (resets on refresh so you can always see the "original" album).
 let easterEgg12Discovered = false;
 let justDiscoveredEgg = false;   // one-shot flag for fade-in animation
+let eggRevealPending = false;    // egg viewed but reveal fade-in not yet played (consumed on browsing return)
 // BS final-photo jumpscare: once-per-session so it lands hard the first time
 // and doesn't get annoying on re-reads of #24.
 let bsJumpscareTriggered = false;
@@ -2415,6 +2416,9 @@ function startViewing() {
   $viewerArrowR.style.transition = '';
   updateViewerArrows();
 
+  // 预取两侧的照片，这样进来后左右翻第一下就已经缓存好、不会闪。
+  preloadNeighborFulls(viewingIdx);
+
   // Photo takes 25 frames (0.42s) + wait 5 ≈ 500ms
   setTimeout(() => { animating = false; }, 500);
 }
@@ -2499,10 +2503,13 @@ function endViewing() {
   state = 'browsing';
   cursorBobPaused = true; // cursor slides back from translateY(500px) to 0; pause bob
 
-  // Easter egg discovery: exiting from photo 12 unlocks the blurry thumbnail (session-only)
-  const discoveringEgg = isDW12Hidden() && viewingIdx === 11;
+  // Easter egg discovery: unlock the blurry thumbnail (session-only). Discovery is normally
+  // marked the moment #12 is opened (see slideViewingPhoto), which sets eggRevealPending;
+  // exiting directly from #12 without navigating first is also still handled here.
+  const discoveringEgg = eggRevealPending || (isDW12Hidden() && viewingIdx === 11);
   if (discoveringEgg) {
     easterEgg12Discovered = true;
+    eggRevealPending = false;
   }
 
   // DW clear-photo reveal: armed in closeMessage when user reads #13 in zoom mode
@@ -2616,75 +2623,114 @@ function updateViewerArrows() {
   $viewerArrowR.style.pointerEvents = hasNext ? '' : 'none';
 }
 
+// 预取 idx 两侧各 2 张 fullsize 照片，让查看器里翻照片时命中浏览器缓存、能立刻解码，
+// 避免滑入一张还没下载完的图导致「闪一下」。开销很小：浏览器会自动去重重复请求。
+function preloadNeighborFulls(idx) {
+  if (!album) return;
+  for (const dir of [1, -1]) {
+    let i = idx;
+    for (let k = 0; k < 2; k++) {
+      i = nextVisibleIdx(i, dir);
+      if (i < 0) break;
+      const n = photoNumAtIdx(i);
+      if (n) new Image().src = fullUrl(album, n);
+    }
+  }
+}
+
 function slideViewingPhoto(dir) {
   if (animating || photoFlipping) return;
-  // Easter egg photo: no nav allowed — user must press X to exit
-  if (isDW12Hidden() && viewingIdx === 11) return;
   // Reset treehouse flip state when navigating away
   photoFlipped = false;
   // Skip empty slots — find next/prev slot that has a photo
   const newIdx = nextVisibleIdx(viewingIdx, dir);
   if (newIdx < 0) return;
 
+  // DW #12 easter egg: reveal it the instant its blurry photo is opened (via right arrow
+  // on photo 11), not only on exit. This clears isDW12Hidden() now, so the viewer arrows
+  // and slideViewingPhoto behave normally — the user can go back to the previous photo (or
+  // forward) instead of being stuck on #12 until pressing X. The thumbnail's fade-in reveal
+  // still plays when we return to browsing (see eggRevealPending in endViewing).
+  if (isDW12Hidden() && newIdx === 11) {
+    easterEgg12Discovered = true;
+    eggRevealPending = true;
+  }
+
   playSfx();
+  // 立刻上锁：下面要先等新图解码，锁住 animating 才不会被连续快速按键叠出第二次切换。
   animating = true;
-
-  // Create a copy of the old photo underneath (stays in place, fades out)
-  const oldImg = document.createElement('img');
-  oldImg.src = $viewerPhoto.src;
-  oldImg.style.cssText = $viewerPhoto.style.cssText;
-  oldImg.style.position = 'absolute';
-  oldImg.style.transform = 'translate(-50%, -50%)';
-  oldImg.style.left = '50%';
-  oldImg.style.top = '50%';
-  oldImg.style.zIndex = '36';
-  // Match #viewer-photo's smooth rendering. Without this the cloned <img> falls
-  // back to the global `img { image-rendering: pixelated }` rule and the
-  // fading-out photo snaps to pixel sampling the instant the slide starts.
-  oldImg.style.imageRendering = 'auto';
-  // Game: old photo fade 25 frames (0.42s) easeInCirc
-  oldImg.style.setProperty('transition', 'opacity 0.42s cubic-bezier(0.55, 0, 1, 0.45)', 'important');
-  $viewer.appendChild(oldImg);
-
-  // Fade out old photo
-  requestAnimationFrame(() => {
-    oldImg.style.opacity = '0';
-  });
 
   // New photo slides in on top from the side
   viewingIdx = newIdx;
   const num = photoNumAtIdx(viewingIdx);
   const newSrc = fullUrl(album, num);
 
-  // Set up slide-in position first, then change src
-  $viewerPhoto.style.transition = 'none';
-  $viewerPhoto.style.transform = dir > 0 ? 'translate(80%, -50%)' : 'translate(-180%, -50%)';
-  $viewerPhoto.style.opacity = '1';
-  $viewerPhoto.style.zIndex = '37';
-  $viewerPhoto.src = newSrc;
+  // 关键修复：先把新图解码好，再开始滑入动画。直接滑入一张还没下载/解码完的 <img>，
+  // 会先显示空白/半张、加载好后又猛地刷新一下——这就是快速翻照片时「闪一下」的来源。
+  // 已缓存（相邻照片已预取）时 decode() 立刻完成，没有额外延迟；用 700ms 超时兜底，
+  // 万一某张图真的很慢也不会把查看器卡死（最坏情况提前滑入，跟旧行为一样）。
+  const pre = new Image();
+  pre.src = newSrc;
+  const decoded = (pre.decode ? pre.decode() : Promise.reject()).catch(() => {});
 
-  // Game: new photo slides in 25 frames (0.42s) easeOutCirc
-  requestAnimationFrame(() => {
+  const startSlide = () => {
+    // Create a copy of the old photo underneath (stays in place, fades out)
+    const oldImg = document.createElement('img');
+    oldImg.src = $viewerPhoto.src;
+    oldImg.style.cssText = $viewerPhoto.style.cssText;
+    oldImg.style.position = 'absolute';
+    oldImg.style.transform = 'translate(-50%, -50%)';
+    oldImg.style.left = '50%';
+    oldImg.style.top = '50%';
+    oldImg.style.zIndex = '36';
+    // Match #viewer-photo's smooth rendering. Without this the cloned <img> falls
+    // back to the global `img { image-rendering: pixelated }` rule and the
+    // fading-out photo snaps to pixel sampling the instant the slide starts.
+    oldImg.style.imageRendering = 'auto';
+    // Game: old photo fade 25 frames (0.42s) easeInCirc
+    oldImg.style.setProperty('transition', 'opacity 0.42s cubic-bezier(0.55, 0, 1, 0.45)', 'important');
+    $viewer.appendChild(oldImg);
+
+    // Fade out old photo
     requestAnimationFrame(() => {
-      $viewerPhoto.style.transition = 'transform 0.42s cubic-bezier(0, 0.55, 0.45, 1)';
-      $viewerPhoto.style.transform = 'translate(-50%, -50%)';
+      oldImg.style.opacity = '0';
     });
-  });
 
-  updateViewerArrows();
-  const hasTextNew = photoHasText(num - 1);
-  const readHiddenNew = album.hideReadPrompt || isDWClearReadHidden(num);
-  const newShiftOpacity = (hasTextNew && !readHiddenNew) ? '1' : '0';
-  if ($shiftRead.style.opacity !== newShiftOpacity) {
-    $shiftRead.style.opacity = newShiftOpacity;
-  }
-  $shiftRead.style.pointerEvents = hasTextNew ? '' : 'none';
+    // Set up slide-in position first, then change src (already decoded → paints immediately)
+    $viewerPhoto.style.transition = 'none';
+    $viewerPhoto.style.transform = dir > 0 ? 'translate(80%, -50%)' : 'translate(-180%, -50%)';
+    $viewerPhoto.style.opacity = '1';
+    $viewerPhoto.style.zIndex = '37';
+    $viewerPhoto.src = newSrc;
 
-  // Clean up old photo after animation (25 frames + wait 5 ≈ 500ms)
-  setTimeout(() => {
-    oldImg.remove();
-    animating = false;
-  }, 500);
+    // Game: new photo slides in 25 frames (0.42s) easeOutCirc
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        $viewerPhoto.style.transition = 'transform 0.42s cubic-bezier(0, 0.55, 0.45, 1)';
+        $viewerPhoto.style.transform = 'translate(-50%, -50%)';
+      });
+    });
+
+    updateViewerArrows();
+    const hasTextNew = photoHasText(num - 1);
+    const readHiddenNew = album.hideReadPrompt || isDWClearReadHidden(num);
+    const newShiftOpacity = (hasTextNew && !readHiddenNew) ? '1' : '0';
+    if ($shiftRead.style.opacity !== newShiftOpacity) {
+      $shiftRead.style.opacity = newShiftOpacity;
+    }
+    $shiftRead.style.pointerEvents = hasTextNew ? '' : 'none';
+
+    // 继续预取新位置两侧的照片，让接着快速翻也能一直命中缓存。
+    preloadNeighborFulls(viewingIdx);
+
+    // Clean up old photo after animation (25 frames + wait 5 ≈ 500ms)
+    setTimeout(() => {
+      oldImg.remove();
+      animating = false;
+    }, 500);
+  };
+
+  Promise.race([decoded, new Promise(r => setTimeout(r, 700))]).then(startSlide);
 }
 
 // ═══════════════════════════════════════════════════
@@ -3035,6 +3081,27 @@ function closeMessage() {
 //  mari_something_transform[3x2] sprite animation → fade to black. We extend with a
 //  5s black hold and a snap back to the main select to give a clean "ejection" feel.
 // ═══════════════════════════════════════════════════
+// Resolve (call `done`) once #select-gif has finished loading its current src — decoded and
+// non-zero size — or after `timeoutMs` as a safety net so we never hang on the black screen.
+// If there's no GIF src (e.g. the BS cover, selectGif=null), resolve immediately.
+function whenSelectGifReady(timeoutMs, done) {
+  const $gif = document.getElementById('select-gif');
+  const ready = () => !$gif.getAttribute('src') || ($gif.complete && $gif.naturalWidth > 0);
+  if (ready()) { done(); return; }
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timer);
+    $gif.removeEventListener('load', finish);
+    $gif.removeEventListener('error', finish);
+    done();
+  };
+  const timer = setTimeout(finish, timeoutMs);
+  $gif.addEventListener('load', finish);
+  $gif.addEventListener('error', finish);
+}
+
 function startBsJumpscare() {
   animating = true;
   const $js = document.getElementById('jumpscare-overlay');
@@ -3052,10 +3119,16 @@ function startBsJumpscare() {
       $js.classList.add('black-cover');
       setTimeout(() => {
         snapToSelectScreen();
-        // Tear down the overlay on the next frame, after select-screen UI is in place.
-        requestAnimationFrame(() => {
-          $js.classList.remove('active', 'playing', 'black-cover');
-          animating = false;
+        // snapToSelectScreen sets the select-screen background GIF synchronously (via the
+        // "first time" branch of updateSelectCursor), but on the live site the GIF may not
+        // have decoded yet — lifting the black cover now flashes a blank/unloaded bg. Hold
+        // the black cover until the GIF is actually loaded (or a 3s safety timeout so we can
+        // never get stuck on black), then give it one frame to paint before revealing.
+        whenSelectGifReady(3000, () => {
+          requestAnimationFrame(() => {
+            $js.classList.remove('active', 'playing', 'black-cover');
+            animating = false;
+          });
         });
       }, 5000);
     }, 500);
