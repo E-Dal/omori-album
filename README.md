@@ -4,7 +4,9 @@ A browser recreation of BASIL'S PHOTO ALBUM from [OMORI](https://www.omori-game.
 
 **Live:** https://e-dal.github.io/omori-album/
 
-![The album: picking a book, turning pages, and reading a caption](assets/preview.gif)
+![The select screen, waiting for you to pick a book](assets/preview_select.gif)
+
+![Turning a page, opening a photo, and reading BASIL's caption](assets/preview_album.gif)
 
 > [!WARNING]
 > **Major spoilers for OMORI**
