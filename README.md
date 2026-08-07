@@ -95,3 +95,7 @@ A segment can also carry `"effect": "distort"`, which switches it to the scratch
 The **code** in this repository is released under the [MIT License](LICENSE).
 
 **The assets are not.** OMORI's sprites, fonts, and audio belong to OMOCAT, LLC; the photo illustrations belong to their artist. Neither is covered by the code license and neither may be redistributed.
+
+## Colophon
+
+The README and most of the code in `index.html` were written by [Claude](https://claude.ai), across a lot of back-and-forth. The caption transcription, the easter-egg design, and the small graphics tweaks are mine.
