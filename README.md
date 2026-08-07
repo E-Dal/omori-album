@@ -12,11 +12,10 @@ A browser recreation of BASIL'S PHOTO ALBUM from [OMORI](https://www.omori-game.
 
 ## What's in it
 
-FARAWAY TOWN, DREAM WORLD, and one more you'll have to find your own way into — every original photo, with all of BASIL's handwritten captions typed out one character at a time.
+FARAWAY TOWN, DREAM WORLD, and one more you'll have to find your own way into — every original photo, with all of BASIL's handwritten captions.
 
 - **Story stages.** Each album can be viewed at different points in the story. Photos appear, vanish, and get scribbled over depending on where you are.
 - **Game-accurate.** Page-turn animation, cursor blips, text blips, per-album BGM — timings ported frame-for-frame from OMORI's own RPG Maker plugin, not eyeballed.
-- **Some things are hidden.** A few photos have more to them than the front side. Go looking.
 
 ## Controls
 
