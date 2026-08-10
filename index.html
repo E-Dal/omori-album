@@ -103,10 +103,14 @@
     position: fixed;
     left: 50%; top: 50%;
     width: 1280px; height: 720px;
-    /* --stage-scale == --select-scale unless the stage's content is wider than the
-       window (phones), in which case updateScale() shrinks it to fit. The blurred
-       bg gif stays on --select-scale so it keeps covering the screen. */
-    transform: translate(-50%, -50%) scale(var(--stage-scale, var(--select-scale, 1)));
+    /* --stage-scale == --select-scale unless the stage's content is wider or taller
+       than the window (phones, landscape), in which case updateScale() shrinks it to
+       fit. The blurred bg gif stays on --select-scale so it keeps covering the screen.
+       --stage-shift-y (window px, applied in the parent's space since translate comes
+       after scale in the matrix) re-centres the content column in the space the footer
+       leaves; it is 0 whenever the content already fits with the stage centred. */
+    transform: translate(-50%, calc(-50% + var(--stage-shift-y, 0px)))
+               scale(var(--stage-scale, var(--select-scale, 1)));
     transform-origin: center center;
     z-index: 99;
   }
@@ -140,20 +144,36 @@
     /* The 560px floor is >= the 553px longest line at base size, so the --boost
        counter-scale rewraps the text rather than widening the box past what the fit
        measurement assumes. Above that floor the box stretches to fill the window:
-       dividing by --stage-scale converts window px into stage px, so the box always
-       renders (window - 16px) wide. Without this the box stayed a fixed slice of the
+       --boost converts window px into stage px, so the box always renders
+       (window - 16px) wide. Without this the box stayed a fixed slice of the
        1280px stage and only filled ~54% of a short, wide window, since the stage is
        scaled by height there. The two cases agree exactly where they meet — when
-       width is the binding constraint, (100vw - 16px) / stage == 560 — so nothing
-       jumps as the binding constraint changes. */
+       width is the binding constraint, (100vw - 16px) * boost == 560 — so nothing
+       jumps as the binding constraint changes.
+       --boost rather than 1 / --stage-scale: the two are identical above --boost's
+       0.55 floor, but below it the text stops counter-scaling and starts shrinking.
+       A box that kept dividing by the raw scale would then hold a constant window
+       width around shrinking text, so its line count — which updateScale() measures
+       to pick that very scale — would move with the scale. Sharing the clamped boost
+       keeps box and text in lockstep, so the line count is scale-independent and the
+       fit converges in one step instead of oscillating. */
     margin: 0;
-    width: max(560px, calc((100vw - 16px) / var(--stage-scale, 1)));
+    width: max(560px, calc((100vw - 16px) * var(--boost)));
   }
   .content-warning {
     position: absolute;
     /* Fill the stage width so text wraps based on max-width, not on the shrink-to-fit
        cap that left:50% alone would impose (parent_width - left = 640px). */
-    left: 0; right: 0; bottom: 6px;
+    left: 0; right: 0;
+    /* Anchored by its TOP edge below the centre, like the hint, rather than to the
+       stage's bottom edge. Bottom-anchoring pins it to a point 720px-tall stage px
+       away while its own text renders at a constant boosted pixel size, so on any
+       shrunk stage it climbed up into the covers (visible in portrait today). 230px
+       is exactly where the bottom-anchored box started at scale 1 with today's
+       3-line text, so the desktop screen is pixel-identical; extra wrapped lines now
+       grow downward, and updateScale() accounts for them. */
+    top: 50%;
+    transform: translateY(230px);
     margin: 0 auto;
   }
   /* Select screen background — always fills the whole window */
@@ -175,7 +195,13 @@
   #select-gif {
     position: fixed; z-index: 99;
     bottom: -2px; left: 50%;
-    transform: translateX(-50%) scale(calc(1.5 * var(--select-scale, 1)));
+    /* --select-gif-scale contain-fits the 640x480 art to the window, capped at the
+       original 1.5x blow-up; see updateScale(). It has to be computed there because a
+       contain fit is a ratio of lengths (100vw / 640px) and CSS calc() can't divide a
+       length by a length to get the unitless number scale() needs. The fallback is the
+       expression this replaced, used only if the var is somehow missing. */
+    transform: translateX(-50%)
+               scale(var(--select-gif-scale, calc(1.5 * var(--select-scale, 1))));
     transform-origin: bottom center;
     opacity: 1;
     filter: blur(3px) brightness(0.6);
@@ -266,14 +292,21 @@
   .content-warning {
     color: #fff; font-size: calc(18px * var(--boost)); letter-spacing: calc(0.5px * var(--boost));
     text-align: center; line-height: 1;
-    max-width: 800px; margin-top: 60px; padding: 0 24px;
+    /* Counter-scaled like the hint's box, and for the same reason: a plain 800px cap is
+       800 *stage* px, so on a shrunk stage it renders 800*scale wide while the boosted
+       text inside it does not shrink — the line count would then move with the very
+       scale updateScale() derives its height from, and the fit would chase its own tail
+       (this row is the widest text on the screen, and it did oscillate). Multiplying by
+       --boost, the same factor the font-size uses, keeps box and text in lockstep at
+       every scale. At scale 1 --boost is 1, so desktop is a plain 800px, untouched. */
+    max-width: calc(min(800px, 100vw - 32px) * var(--boost));
+    padding: 0 24px;
   }
   /* BS warning only shows on the BS-only select screen. */
   .content-warning-bs { display: none; }
   body.bs-only-select .content-warning-bs {
     display: block;
     font-size: calc(28px * var(--boost)); /* bigger to feel more urgent (red bg already, no color change) */
-    bottom: 46px; /* lift up so the bigger text isn't crammed against the bottom edge */
   }
 
   /* Narrow enough that the two sentences can no longer each hold a line (see the
@@ -1677,6 +1710,28 @@ function startLoop() {
 // ═══════════════════════════════════════════════════
 //  Viewport scaling
 // ═══════════════════════════════════════════════════
+// How the select-screen group art (#select-gif, the 640x480 group_*.gif) is fitted to
+// the window. Two modes kept side by side to compare; flip this one line.
+//
+//   'contain' — fit both axes, capped at the original 1.5x blow-up. Never cropped: the
+//               art shrinks with the window in both directions. Smaller on a phone, but
+//               whole — you see the entire group.
+//   'cover'   — the original. Blown up 1.5x so it stands 720px tall (the height of the
+//               stage it was composed against) and cropped by the window: bigger and
+//               more atmospheric, but heads come off the top in landscape and portrait
+//               shows only the middle ~40% of a 960px-wide subject in a 390px window.
+//
+// Desktop is identical either way — at every window >= 1280x720 both modes land on 1.5.
+// The difference only appears on phone-sized windows.
+//
+// 'cover' is the chosen look: bigger and more atmospheric beats whole-but-small, so the
+// cropping is accepted deliberately. 'contain' is kept so the two can be compared again
+// without rebuilding it.
+//
+// This is a plain top-level `let` in a classic script, so it can also be flipped live
+// from the devtools console without a reload:  SELECT_GIF_FIT = 'contain'; updateScale()
+let SELECT_GIF_FIT = 'cover';
+
 function updateScale() {
   // Album view: letterbox (fit). When in-album, the legend bar at the top
   // reserves `30px * scale` of vertical space, so subtract it from available height.
@@ -1697,6 +1752,17 @@ function updateScale() {
   ));
   document.documentElement.style.setProperty('--select-scale', selectScale);
 
+  document.documentElement.style.setProperty('--select-gif-scale',
+    SELECT_GIF_FIT === 'cover'
+      // The original: ride --select-scale, itself a cover fit, so the art holds its full
+      // size however narrow or short the window gets and is simply cropped.
+      ? 1.5 * selectScale
+      // --select-scale drops out of the contain form as an identity, not by hand:
+      // min(1.5 * selectScale, w/640, h/480) with selectScale = min(1, max(w/1280,
+      // h/720)) always reduces to this, because whichever way the inner max() goes the
+      // h/480 term is already <= it and absorbs the whole factor.
+      : Math.min(1.5, window.innerWidth / 640, window.innerHeight / 480));
+
   // Narrow windows (phones): cover-fit above crops the 1280px stage horizontally,
   // cutting the album covers and the control hint off both edges. Shrink the stage
   // — and only the stage — until its widest row fits. On any window wide enough to
@@ -1707,8 +1773,77 @@ function updateScale() {
   const contentW = selectContentWidth();
   if (contentW) {
     const fit = (window.innerWidth - 16) / contentW;
-    document.documentElement.style.setProperty('--stage-scale', Math.min(selectScale, fit));
+    // Short windows (landscape phones): the cover fit above picks w/1280, so the
+    // 720px-tall stage renders far taller than the window and everything anchored
+    // below centre drops off the bottom / lands under the footer. Bound the scale
+    // by height too, then shift the stage so the content sits inside what's left.
+    const { scale, shiftY } = selectVFit(Math.min(selectScale, fit));
+    stageScale = scale;
+    document.documentElement.style.setProperty('--stage-scale', scale);
+    document.documentElement.style.setProperty('--stage-shift-y', shiftY + 'px');
   }
+}
+
+// Anchor offsets of the select rows from the stage centre, in stage px. Keep in sync
+// with the transforms on #album-select h1 / .select-hint / .content-warning.
+const H1_OFFSET = 230;    // h1's centre sits this far above the stage centre
+const HINT_OFFSET = 195;  // the hint's TOP edge sits this far below it
+const WARN_OFFSET = 230;  // ditto the BS content warning's (it replaces the hint there)
+const EDGE_PAD = 6;       // breathing room against the window edges
+// Last value written to --stage-scale. Read back rather than re-parsed from the
+// custom property so the unboost below can't drift from what's actually rendered.
+let stageScale = 1;
+
+// Vertical fit. Each select row bounds the content's half-extent above or below the
+// stage centre by a line A*s + B: A is stage px (anchor offsets, cover artwork — it
+// scales with s), B is window px (boosted text, which renders at a constant pixel
+// size and so does NOT scale). Solving every up/down pair for
+// `up + down <= availTop + availBot` and taking the smallest root gives the largest
+// scale at which the tallest row still fits; the shift then places that column
+// inside the asymmetric window (the footer eats into the bottom only).
+//
+// Text heights are un-boosted back to their base before use, so B is independent of
+// the very scale it feeds — the ResizeObserver on these rows can't oscillate. Below
+// --boost's 0.55 floor text starts shrinking again and the constant B overestimates,
+// which only leaves extra slack; it can never overflow.
+function selectVFit(maxScale) {
+  const unboost = Math.min(1, Math.max(0.55, stageScale)); // == the clamp() in --boost
+  const baseH = sel => {
+    const el = document.querySelector(sel);
+    return el && el.offsetHeight ? el.offsetHeight * unboost : 0;
+  };
+  const coversH = document.querySelector('.album-covers')?.offsetHeight || 0;
+  const h1H = baseH('#album-select h1');
+  const hintH = baseH('.select-hint');
+  const warnH = baseH('.content-warning');
+
+  const ups = [{ A: coversH / 2, B: 0 }];
+  const downs = [{ A: coversH / 2, B: 0 }];
+  if (h1H) ups.push({ A: H1_OFFSET, B: h1H / 2 });
+  if (hintH) downs.push({ A: HINT_OFFSET, B: hintH });
+  if (warnH) downs.push({ A: WARN_OFFSET, B: warnH });
+
+  // The footer is fixed in window space, not stage space, so it has to be reserved
+  // out of the bottom half explicitly or the hint renders straight through it.
+  const footer = document.getElementById('site-footer');
+  const footerH = footer && footer.offsetHeight
+    ? footer.offsetHeight + parseFloat(getComputedStyle(footer).bottom) : 0;
+  const availTop = window.innerHeight / 2 - EDGE_PAD;
+  const availBot = window.innerHeight / 2 - EDGE_PAD - footerH;
+
+  let scale = maxScale;
+  ups.forEach(u => downs.forEach(d => {
+    const span = u.A + d.A;
+    if (span > 0) scale = Math.min(scale, (availTop + availBot - u.B - d.B) / span);
+  }));
+  scale = Math.max(0, scale);
+
+  const up = Math.max(...ups.map(u => u.A * scale + u.B));
+  const down = Math.max(...downs.map(d => d.A * scale + d.B));
+  // Admissible shifts are [up - availTop, availBot - down]; prefer 0 so that any
+  // window with room to spare — every desktop one — keeps the stage dead centred.
+  const shiftY = Math.min(Math.max(0, up - availTop), availBot - down);
+  return { scale, shiftY };
 }
 
 // Widest laid-out row on the select screen, in unscaled stage px. Measured live
@@ -1716,12 +1851,15 @@ function updateScale() {
 // unlocked, and the OMORI webfont settles after first paint. offsetWidth is layout
 // width, so the stage's own transform doesn't feed back into this.
 const SELECT_ROWS = '#album-select h1, .album-covers, .select-hint, .content-warning';
-// Rows whose width is a plain layout fact. The hint is deliberately not among them:
-// its width is derived from --stage-scale (it stretches to fill the window once width
-// stops being the binding constraint), so measuring it would feed back into the very
-// scale it depends on. Its fixed floor is used instead.
-const MEASURED_ROWS = '#album-select h1, .album-covers, .content-warning';
+// Rows whose width is a plain layout fact. The hint and the content warning are
+// deliberately not among them: both derive their width from --stage-scale / --boost
+// (the hint stretches to fill the window once width stops being the binding
+// constraint; the warning's cap is counter-scaled so its line count stays fixed), so
+// measuring either would feed back into the very scale it depends on. Their fixed
+// box widths are used instead.
+const MEASURED_ROWS = '#album-select h1, .album-covers';
 const HINT_BOX_W = 560; // keep in sync with the floor in .select-hint's width
+const WARN_BOX_W = 800; // keep in sync with the cap in .content-warning's max-width
 function selectContentWidth() {
   let w = 0;
   document.querySelectorAll(MEASURED_ROWS).forEach(el => {
@@ -1729,9 +1867,12 @@ function selectContentWidth() {
     // The selected cover is scale(1.08)-ed, which the row's layout box doesn't include.
     w = Math.max(w, el.offsetWidth * (el.classList.contains('album-covers') ? 1.05 : 1));
   });
-  // offsetWidth here is only a visibility test — hidden in-album and on the BS-only screen.
+  // offsetWidth here is only a visibility test — each is hidden in-album, and the two
+  // swap places between the regular select screen and the BS-only one.
   const hint = document.querySelector('.select-hint');
   if (hint && hint.offsetWidth) w = Math.max(w, HINT_BOX_W);
+  const warn = document.querySelector('.content-warning');
+  if (warn && warn.offsetWidth) w = Math.max(w, WARN_BOX_W);
   return w;
 }
 
