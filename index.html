@@ -46,7 +46,67 @@
     src: url('assets/ui/OMORI_GAME.ttf') format('truetype');
     font-display: block;
   }
-  .text-distort { font-family: 'OMORI_TITLE', sans-serif; }
+  /* XiaolaiSC (小赖字体, LXGW, SIL OFL 1.1) — the face the official Simplified
+     Chinese build of OMORI actually ships. Its fonts/gamefont.css maps GameFont
+     straight to XiaolaiSC-Regular.ttf, so this is literally what a Chinese
+     playthrough looks like; the pixel faces tried before it were guesses and none
+     of them matched. Subset by subset.py from 20.8MB down to ~150KB.
+
+     It sits *after* OMORI in the stack rather than replacing it. The Chinese game
+     does swap GameFont wholesale — Latin included — but that only works because
+     every string in the game is translated. Here BLACKSPACE has no official
+     Chinese (its 24 captions are placeholders in the game's own files) and falls
+     back to English, so a wholesale swap rendered a whole album's English text in
+     Xiaolai: same words, 45% taller caps, wrong face. Keeping OMORI first means
+     the browser only reaches Xiaolai for glyphs OMORI lacks — i.e. exactly the
+     Chinese — and untranslated English renders identically in both languages.
+
+     size-adjust: 64% because a hanzi fills 0.814 of its em box while OMORI's cap-H
+     fills only 0.431 of its — untouched, Chinese renders far larger than the Latin
+     beside it and the select-screen fit (which measures these rows) moves with it.
+     It is the one number controlling this, and it was walked down by eye:
+        90% -> hanzi 20.5px in the 28px message box, 1.70x cap   (too big)
+        80% -> 18.2px, 1.51x                                     (still too big)
+        72% -> 16.4px, 1.36x
+        68% -> 15.5px, 1.29x
+        66% -> 15.1px, 1.25x
+        65% -> 14.9px, 1.23x
+        64% -> 14.6px, 1.21x   <- here */
+  @font-face {
+    font-family: 'XIAOLAI';
+    src: url('assets/ui/xiaolai_subset.woff2') format('woff2');
+    size-adjust: 64%;
+    font-display: swap;
+  }
+  /* In Chinese the whole stack becomes Xiaolai, exactly as the game's gamefont.css
+     does — GameFont *is* XiaolaiSC there, Latin included. That is why the original
+     renders "2/18 - 我的生日" with a long dash and tight spacing while a mixed stack
+     gives a short OMORI hyphen padded either side, and why "OMORI" inside a Chinese
+     sentence matches its neighbours in-game but not here.
+
+     This was tried once before and reverted, because back then untranslated photos
+     fell back to English and a whole album of English prose ended up in Xiaolai. That
+     no longer happens: applyCaptions() leaves untranslated photos silent, so the only
+     Latin left in Chinese is the handful of words embedded in Chinese sentences —
+     character names, WASD, the credit line — every one of which the game also sets in
+     Xiaolai. A scoped unicode-range face for the curly quotes is no longer needed
+     either; they come from Xiaolai now like everything else. */
+  html[lang^="zh"] body,
+  html[lang^="zh"] #site-footer { font-family: 'XIAOLAI', sans-serif; }
+  /* keep-all stops CJK breaking between characters, so a Chinese run became one
+     unbreakable word: it could not fit after "OMORI " and wrapped whole, leaving a
+     near-empty first line. Chinese is supposed to break between characters. */
+  html[lang^="zh"] #message-box {
+    word-break: normal;
+    /* One hanzi (17.92px at this size) more room on the right. Our text area was
+       576.9px wide, just enough to pull one extra character onto the first line, so
+       "掌握了制作方 / 法" instead of the game's "掌握了制作 / 方法". Padding rather
+       than a font-size nudge: the glyph size is already what it should be, it is the
+       measure that was a character too generous. */
+    padding-right: 32px;
+  }
+  .text-distort { font-family: 'OMORI_TITLE', 'XIAOLAI', sans-serif; }
+  /* The distort face has no CJK either, so it needs the same fallback. */
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
     background: #000;
@@ -54,7 +114,7 @@
     width: 100vw; height: 100vh;
     user-select: none;
     -webkit-user-select: none;
-    font-family: 'OMORI', sans-serif;
+    font-family: 'OMORI', 'XIAOLAI', sans-serif;
   }
 
   /* ── Site footer credit ── */
@@ -65,8 +125,8 @@
     z-index: 998;
     padding: 6px 10px;
     text-align: center;
-    font-family: 'OMORI', sans-serif;
-    font-size: 15px;
+    font-family: 'OMORI', 'XIAOLAI', sans-serif;
+    font-size: 17px;
     letter-spacing: 1px;
     color: #fff;
     background: transparent;
@@ -141,7 +201,8 @@
        downward instead of riding up into the selected album's hand cursor. 195px is
        where the old centre-anchored 2-line box started, so desktop is unchanged. */
     transform: translate(-50%, 195px);
-    /* The 560px floor is >= the 553px longest line at base size, so the --boost
+    /* The 650px floor is >= the 633px longest line at 24px (and >= the 591px the h1
+       reaches at maximum boost), so the --boost
        counter-scale rewraps the text rather than widening the box past what the fit
        measurement assumes. Above that floor the box stretches to fill the window:
        --boost converts window px into stage px, so the box always renders
@@ -158,7 +219,7 @@
        keeps box and text in lockstep, so the line count is scale-independent and the
        fit converges in one step instead of oscillating. */
     margin: 0;
-    width: max(560px, calc((100vw - 16px) * var(--boost)));
+    width: max(650px, calc((100vw - 16px) * var(--boost)));
   }
   .content-warning {
     position: absolute;
@@ -215,15 +276,31 @@
     transition: opacity 0.25s;
   }
   #select-bg-fade.active { opacity: 1; }
-  #album-select h1 { color: #fff; font-size: calc(30px * var(--boost)); letter-spacing: calc(4px * var(--boost)); }
+  /* line-height as a ratio, not the font's own: a block's height is its line box, which
+     comes from the font's ascent/descent, so the title box was 66px in English and 38px
+     in Chinese. selectVFit() reads that height back, so on a short window the two
+     languages solved to different --stage-shift-y and the whole stage jumped when you
+     switched. A unitless 1.2 makes the height a pure function of font-size — same in
+     both — and still scales with --boost. Same class of bug as the cover label. */
+  #album-select h1 { color: #fff; font-size: calc(34px * var(--boost)); line-height: 1.2; letter-spacing: calc(4px * var(--boost)); }
   .album-covers { display: flex; gap: 50px; }
   .album-cover-btn {
     text-align: center;
     transition: transform 0.2s;
   }
   .album-cover-btn.selected { transform: scale(1.08); }
-  .album-cover-btn canvas { height: 240px; width: auto; }
-  .album-cover-label { color: #ccc; margin-top: 5px; font-size: 16px; letter-spacing: 1px; }
+  /* Block for the third time, same reason: an inline <canvas> is a replaced element
+     sitting on a text baseline, so the strut's descent — and this column's height —
+     tracked the font. Blockifying all three (canvas, label, cursor) is what makes the
+     row's height language-independent, which is what stops the artwork moving when
+     the language changes. */
+  .album-cover-btn canvas { display: block; margin: 0 auto; height: 240px; width: auto; }
+  /* Explicit line-height, not the font's own. A text block's height is its line box,
+     which is derived from the *font's* ascent/descent — so switching to Xiaolai
+     silently changed this row's height, and .album-covers is centred on the stage, so
+     the artwork slid. 18px is what the English face already produced, so English is
+     unchanged and Chinese now matches it. */
+  .album-cover-label { color: #ccc; margin-top: 5px; font-size: 20px; line-height: 18px; letter-spacing: 1px; }
   .album-cover-btn.selected .album-cover-label { color: #fff; }
   /* Stage roller (above each album cover) — click triangles to switch */
   .stage-roller {
@@ -233,7 +310,7 @@
     display: flex; flex-direction: row;
     align-items: center; justify-content: center;
     gap: 14px;
-    color: #fff; font-size: 15px; letter-spacing: 2px;
+    color: #fff; font-size: 19px; letter-spacing: 2px;
     text-align: center;
     transform: translateY(14px);
   }
@@ -261,6 +338,11 @@
   .album-cover-btn:not(.selected) .stage-roller { opacity: 0.55; }
   .album-cover-btn:not(.selected) .stage-current { color: #bbb; }
   .select-cursor {
+    /* display:block for the same reason: as an inline image it sat on a text baseline,
+       so the strut's descent — and with it this row's height — moved with the font.
+       It also makes the `auto` side margins actually centre it, which is what they
+       were always written for. */
+    display: block;
     width: 38px; height: 22px;
     margin: 20px auto 0;
     visibility: hidden;
@@ -268,7 +350,7 @@
   }
   .album-cover-btn.selected .select-cursor { visibility: visible; }
   .select-hint {
-    color: #fff; font-size: calc(20px * var(--boost)); letter-spacing: calc(1px * var(--boost));
+    color: #fff; font-size: calc(24px * var(--boost)); letter-spacing: calc(1px * var(--boost));
     text-align: center; line-height: 1.25;
     /* Greedy, not `balance`: once the forced break is dropped below the breakpoint this
        fills every line and leaves only the last one short. `balance` would even all the
@@ -290,7 +372,7 @@
     white-space: nowrap;
   }
   .content-warning {
-    color: #fff; font-size: calc(18px * var(--boost)); letter-spacing: calc(0.5px * var(--boost));
+    color: #fff; font-size: calc(22px * var(--boost)); letter-spacing: calc(0.5px * var(--boost));
     text-align: center; line-height: 1;
     /* Counter-scaled like the hint's box, and for the same reason: a plain 800px cap is
        800 *stage* px, so on a shrunk stage it renders 800*scale wide while the boosted
@@ -306,7 +388,7 @@
   .content-warning-bs { display: none; }
   body.bs-only-select .content-warning-bs {
     display: block;
-    font-size: calc(28px * var(--boost)); /* bigger to feel more urgent (red bg already, no color change) */
+    font-size: calc(32px * var(--boost)); /* bigger to feel more urgent (red bg already, no color change) */
   }
 
   /* Narrow enough that the two sentences can no longer each hold a line (see the
@@ -315,8 +397,25 @@
      than this the break stays and the hint renders exactly as it always has. This is
      the one deliberate breakpoint on the select screen; it only shifts a couple of
      words, unlike a font-size step, and it sits where the wrapping changes anyway. */
-  @media (max-width: 599px) {
+  @media (max-width: 680px) {
     .select-hint br { display: none; }
+
+    /* Phone rebalance. The hint counter-scales by --boost so it renders at a constant
+       window size — which next to artwork that *has* shrunk reads as enormous — while
+       the cover labels and stage roller are plain stage px and shrink right along with
+       it. Pull the two toward each other: the guide down, the labels up.
+
+       Both are constant stage px, so .album-covers' height changes once and stays
+       put. That matters: selectVFit() puts coversH wholly in its scale-dependent
+       term, so a height that moved *with* the scale would close the loop the
+       select-screen notes warn about. A width breakpoint can't — the scale doesn't
+       feed back into it. The h1 and the footer are untouched by request. */
+    .select-hint { font-size: calc(20px * var(--boost)); }
+    .album-cover-label { font-size: 26px; line-height: 26px; }
+    .stage-roller { font-size: 24px; }
+    /* Same +2 as above; needed again here because the zh selector outranks the plain
+       one even inside this query, so without it the phone bump would be undone. */
+    html[lang^="zh"] .stage-roller { font-size: 26px; }
   }
 
   /* ── Game viewport (640x480 scaled) ── */
@@ -370,7 +469,7 @@
     display: flex; align-items: center;
     gap: calc(6px * var(--scale, 1));
     color: #fff;
-    font-size: calc(23px * var(--scale, 1));
+    font-size: calc(25px * var(--scale, 1));
     letter-spacing: calc(1px * var(--scale, 1));
     cursor: pointer;
   }
@@ -485,7 +584,8 @@
   #scene-transition.slow-fade { transition: opacity 1.5s linear; }
 
   /* ── BS final-photo jumpscare easter egg ──
-     After reading BS photo #24, freeze for 3.3s, then play SE_something_disappears +
+     After reading BS photo #24, freeze for 200 frames / 3.33s (the game's wait, see
+     JUMPSCARE_WAIT_MS), then play SE_something_disappears +
      mari_something_transform[3x2] sprite-sheet animation, then 5s of black, then
      snap back to main select. */
   #jumpscare-overlay {
@@ -574,9 +674,12 @@
   .album-cover-btn[data-album="blackspace"] .stage-roller { visibility: hidden; }
 
   /* ── Music toggle button ── */
-  #music-toggle {
+  /* Corner button stack. The gear takes the top slot (16px) and music sits one
+     slot below it (16 + 40 + 8). Both are window-fixed, not stage-scaled, so the
+     stack is unaffected by --stage-scale. */
+  #settings-toggle, #music-toggle {
     position: fixed;
-    top: 16px; left: 16px;
+    left: 16px;
     width: 40px; height: 40px;
     display: none;
     align-items: center; justify-content: center;
@@ -586,8 +689,21 @@
     z-index: 200;
     cursor: pointer;
   }
-  #music-toggle:hover { background: rgba(0,0,0,0.85); border-color: rgba(255,255,255,0.6); }
-  #music-toggle svg { width: 22px; height: 22px; }
+  #settings-toggle { top: 16px; }
+  #music-toggle    { top: 64px; }
+  #settings-toggle:hover, #music-toggle:hover { background: rgba(0,0,0,0.85); border-color: rgba(255,255,255,0.6); }
+  /* While the settings screen is up the music button is out of reach behind its
+     backdrop, so it says so instead of looking live but doing nothing. The gear stays
+     lit — it is still the way back out. */
+  body.settings-open #music-toggle {
+    filter: grayscale(1) brightness(0.5);
+    pointer-events: none;
+  }
+  #settings-toggle svg, #music-toggle svg { width: 22px; height: 22px; }
+  /* The gear turns while the panel is open — the only motion in the corner, so it
+     reads as "this button owns that panel" without needing a highlight state. */
+  #settings-toggle svg { transition: transform 0.25s ease; }
+  #settings-toggle.open svg { transform: rotate(60deg); }
   .music-slash {
     position: absolute;
     top: 50%; left: 50%;
@@ -598,7 +714,181 @@
     transition: opacity 0.2s;
   }
   #music-toggle.playing .music-slash { opacity: 0; }
-  body.on-select #music-toggle { display: flex; }
+  body.on-select #music-toggle, body.on-select #settings-toggle { display: flex; }
+
+  /* ── Settings screen ──
+     A recreation of the game's Scene_OmoMenuOptions. Every number below is lifted
+     from the decrypted plugin (Omori Main Menu - Scene Options.js) and is in *game*
+     pixels, on the same 640x480 grid #scene uses, so the whole thing is authored at
+     1:1 and scaled once by --scale — the same factor the album view rides.
+       window x=10 w=620 (Graphics.width - 20), border 3px
+       category window h=44, padding 10, lineHeight 24, cursor text offset x+25
+       option window  h=318, padding 8, itemHeight 75
+       header at item x+50; bar at x+60, y+50; percent at x+415 w=100, right-aligned
+       volume bar: 100 ticks, 2px wide on a 4px pitch = 400px, 20px tall,
+                   rgb(100,100,100) unlit / #fff lit
+       help window h=44
+     Vertical stack measured off a 2x screenshot of the real menu: 44 / gap 2 / 318 /
+     gap 2 / 44, starting at y=10. */
+  #settings-screen {
+    position: fixed; inset: 0;
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 200;
+    background: rgba(0,0,0,0.55);
+  }
+  #settings-screen.open { display: flex; }
+  #settings-stage {
+    position: relative;
+    width: 640px; height: 480px;
+    flex: none;
+    transform: scale(var(--scale, 1));
+    transform-origin: center center;
+    font-family: 'OMORI', 'XIAOLAI', sans-serif;
+    color: #fff;
+  }
+  html[lang^="zh"] #settings-stage { font-family: 'XIAOLAI', sans-serif; }
+  /* Stage names sit on the cover art at a small size and Xiaolai reads thin there.
+     .stage-roller's height is a fixed 32px, so this cannot move the covers row. */
+  html[lang^="zh"] .stage-roller { font-size: 21px; }
+  /* Xiaolai at the shared size-adjust sits a shade small in this dense panel. */
+  html[lang^="zh"] .set-tab,
+  html[lang^="zh"] .set-item-header,
+  html[lang^="zh"] .set-percent { font-size: 27px; }
+  html[lang^="zh"] #set-help { font-size: 25px; }
+  .set-window {
+    position: absolute;
+    left: 10px; width: 620px;
+    background: #000;
+    border: 3px solid #fff;
+    outline: 1px solid #000;
+    box-sizing: border-box;
+  }
+  /* The stack is 44 + 2 + 318 + 2 + 44 = 410 tall; (480 - 410) / 2 = 35 centres it
+     on the 640x480 stage. The game top-anchors it at y=10 instead. */
+  #set-tabs    { top: 35px;  height: 44px; }
+  #set-body    { top: 81px;  height: 318px; }
+  #set-help    { top: 401px; height: 44px; font-size: 24px; padding: 6px 10px; }
+
+  /* Tabs: Window_Command with maxCols = tab count, so equal columns across the
+     content width (620 - 2*10 padding). Text is centred in its column; the hand sits
+     25px left of the text, matching customCursorRectTextXOffset. */
+  #set-tabs-row {
+    display: flex;
+    height: 100%;
+    padding: 0 10px;
+    align-items: center;
+  }
+  .set-tab {
+    flex: 1 1 0;
+    position: relative;
+    text-align: center;
+    font-size: 26px;
+    line-height: 24px;
+    color: #fff;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  /* The hand hangs off the label rather than sitting in the flex flow, so it can
+     ride up against the text (measured: 5.5px of gap) and overlap into the column
+     without nudging the centred label — which is what the game does, since the
+     cursor is a sprite drawn over the window and the label is centred independently. */
+  /* Shrink-to-fit box around the label so `right: 100%` lands the hand's right edge
+     exactly on the text's left edge. */
+  .set-tab-inner { position: relative; display: inline-block; }
+  .set-tab .set-hand {
+    position: absolute;
+    right: 100%; margin-right: 6px;
+    top: 50%;
+    width: 29px; height: 15px;
+    margin-top: -8px;
+    visibility: hidden;
+    image-rendering: pixelated;
+  }
+  .set-tab.active .set-hand { visibility: visible; }
+
+  /* Option rows.
+     Positions are relative to the option window's *inner* edge (inside its 3px
+     border) and were measured off a 2x screenshot of the real menu, because the
+     plugin's own numbers are anchored two different ways and mixing them is what
+     put the bar 12px right of and below where it belongs: the header is drawn into
+     `contents`, which is already inset by standardPadding() = 8, while the volume
+     bar is a Sprite added straight to the window, so its rect.x + 60 counts from the
+     window frame instead. Measured, header and bar start on nearly the same column.
+       row pitch 75 (itemHeight)   header ink ~11   bar 46..66   percent 32..72
+       hand centre (24, 19.5), sprite 29x15 */
+  #set-items { position: relative; height: 100%; }
+  .set-item { position: absolute; left: 0; right: 0; height: 64px; }
+  .set-item .set-hand {
+    position: absolute;
+    left: 9.5px; top: 12px;
+    width: 29px; height: 15px;
+    image-rendering: pixelated;
+  }
+  /* Deactivated cursor: the game keeps drawing it on index 0 with
+     setColorTone([-80,-80,-80,255]) and stops its animation, which is why the first
+     row alone shows a grey hand that doesn't move while the category bar has focus. */
+  .set-item .set-hand.idle { filter: grayscale(1) brightness(0.55); }
+  .set-item .set-hand.hidden { visibility: hidden; }
+  .set-item-header {
+    position: absolute; left: 55px; top: 6px;
+    height: 24px; line-height: 24px;
+    font-size: 26px;
+  }
+  .set-bar { cursor: pointer; }
+  .set-bar {
+    /* Tightened from the measured 46 — the game's own gap between a label and its bar
+       reads loose here because our rows carry one label each and nothing else. */
+    position: absolute; left: 56px; top: 40px;
+    width: 400px; height: 20px;
+    /* 100 ticks: 2px of ink then 2px of gap, exactly as the plugin fills them. */
+    background-image: repeating-linear-gradient(to right,
+      rgb(100,100,100) 0 2px, transparent 2px 4px);
+  }
+  .set-bar-fill {
+    position: absolute; left: 0; top: 0; height: 100%;
+    background-image: repeating-linear-gradient(to right,
+      #fff 0 2px, transparent 2px 4px);
+    /* Same 4px period from the same origin, so clipping by width can only ever cut
+       on a tick boundary and the lit run stays registered with the unlit one. */
+  }
+  .set-percent {
+    position: absolute; left: 420px; top: 28px;
+    width: 100px; height: 40px;
+    line-height: 40px;
+    text-align: right;
+    font-size: 26px;
+  }
+  /* Language: both options on one line. Each sits in a shrink-to-fit box so its hand
+     can hang off the left edge with `right: 100%`, the same trick the tabs use. */
+  .set-opt-box {
+    position: absolute; top: 5px;
+    display: inline-block;
+  }
+  .set-opt-box .set-hand {
+    position: absolute;
+    /* left:auto is load-bearing: .set-item .set-hand sets left:9.5px at equal
+       specificity, and with both left and right resolved the left wins, which parked
+       the hand on top of the label instead of beside it. */
+    left: auto; right: 100%; margin-right: 6px;
+    top: 50%; margin-top: -8px;
+    width: 29px; height: 15px;
+    image-rendering: pixelated;
+  }
+  .set-opt-box .set-hand[hidden] { display: none; }
+  /* Both options stay white. Dimming the inactive one doubled up with the hand as a
+     "which is selected" signal and read as if the option were disabled; the hand
+     alone carries it. */
+  .set-opt {
+    /* 27px in both languages, not 26 + a zh bump like its neighbours. These two labels
+       are the only strings that stay on screen *through* a language change, so a 1px
+       step here is a visible twitch rather than a difference you'd have to A/B. The
+       rest of the panel re-renders into different words anyway. */
+    font-size: 27px; line-height: 24px;
+    color: #fff;
+    cursor: pointer;
+    white-space: nowrap;
+  }
 
   /* ── Page flip overlay ── */
   #page-flip {
@@ -626,7 +916,7 @@
     background: rgba(0, 0, 0, 0.85);
     color: #fff;
     padding: 6px 16px;
-    font-size: 14px;
+    font-size: 16px;
     letter-spacing: 1px;
     z-index: 25;
     white-space: nowrap;
@@ -687,7 +977,7 @@
   }
   #shift-read-prompt .legend-icon { height: 24px; position: relative; top: 6px; left: -3px; }
   #shift-read-prompt span {
-    color: #fff; font-size: 26px; letter-spacing: 1px;
+    color: #fff; font-size: 28px; letter-spacing: 1px;
     margin-left: -8px;
     position: relative;
     top: 3px;
@@ -713,7 +1003,7 @@
     padding-right: 14px;
     padding-bottom: 11px;
     padding-left: 14px;
-    font-size: 28px;
+    font-size: 30px;
     word-break: keep-all;
     overflow-wrap: normal;
     line-height: 29px;
@@ -746,7 +1036,7 @@
     outline: 1px solid #000;
     color: #fff;
     padding: 0 8px 4px 8px;
-    font-size: 28px;
+    font-size: 30px;
     line-height: 30px;
     white-space: nowrap;
     display: none;
@@ -878,12 +1168,37 @@
     <!-- The <br> is dropped below the breakpoint in the CSS, where the sentences no
          longer each fit a line; the space before it is what separates them once it goes
          (it is trimmed at end-of-line, so it changes nothing above the breakpoint). -->
-    <div class="select-hint">Besides clicking, you can also use Arrow keys / WASD to navigate, <br>Z / Enter to confirm, and X / Esc to cancel, just like the game! <span class="nb">(・∀・)</span></div>
+    <div class="select-hint">Besides clicking, you can also use Arrow keys / WASD to navigate, <br>Z / Enter / Space to confirm, and X / Esc to cancel, just like the game! <span class="nb">(・∀・)</span></div>
     <div class="content-warning content-warning-bs">WARNING: Major spoilers ahead. TRUTH ALBUM contains graphic imagery, body horror, and explicit depictions of death — the most disturbing content in OMORI. Proceed only if you're prepared.</div>
   </div>
 </div>
 
-<!-- Music toggle stays at window corner (not scaled with stage) -->
+<!-- Corner buttons stay at the window corner (not scaled with stage) -->
+<div id="settings-toggle" onclick="toggleSettings()">
+  <svg viewBox="0 0 24 24" fill="white">
+    <path d="M19.14 12.94a7.07 7.07 0 000-1.88l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.61-.22l-2.39.96a7.03 7.03 0 00-1.63-.94l-.36-2.54a.5.5 0 00-.5-.42h-3.84a.5.5 0 00-.5.42l-.36 2.54c-.59.24-1.13.56-1.63.94l-2.39-.96a.5.5 0 00-.61.22L2.63 8.84a.5.5 0 00.12.64l2.03 1.58a7.07 7.07 0 000 1.88l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32c.13.22.39.31.61.22l2.39-.96c.5.38 1.04.7 1.63.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.63-.94l2.39.96c.22.09.48 0 .61-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.6A3.6 3.6 0 1112 8.4a3.6 3.6 0 010 7.2z"/>
+  </svg>
+</div>
+
+<!-- Settings screen — a recreation of the game's options menu. Text content is
+     written by applyLang()/renderSettings() so it translates with everything else. -->
+<div id="settings-screen">
+  <div id="settings-stage">
+    <div class="set-window" id="set-tabs">
+      <div id="set-tabs-row">
+        <div class="set-tab active" data-tab="audio"><span class="set-tab-inner"><img
+          class="set-hand" src="assets/ui/cursor_menu.png" alt=""><span class="set-tab-label"></span></span></div>
+        <div class="set-tab" data-tab="lang"><span class="set-tab-inner"><img
+          class="set-hand" src="assets/ui/cursor_menu.png" alt=""><span class="set-tab-label"></span></span></div>
+      </div>
+    </div>
+    <div class="set-window" id="set-body">
+      <div id="set-items"></div>
+    </div>
+    <div class="set-window" id="set-help"></div>
+  </div>
+</div>
+
 <div id="music-toggle" onclick="toggleMusic()">
   <svg viewBox="0 0 24 24" fill="white">
     <path d="M3 9v6h4l5 5V4L7 9H3z"/>
@@ -902,10 +1217,10 @@
 <div id="legend-bar">
   <div id="legend-bar-inner">
     <div class="legend-item" id="legend-read">
-      READ: <img class="legend-icon" src="assets/ui/kb_shift.png" alt="SHIFT">
+      <span class="legend-label">READ:</span> <img class="legend-icon" src="assets/ui/kb_shift.png" alt="SHIFT">
     </div>
     <div class="legend-item" id="legend-view">
-      VIEW: <img class="legend-icon" src="assets/ui/kb_z.png" alt="Z">
+      <span class="legend-label">VIEW:</span> <img class="legend-icon" src="assets/ui/kb_z.png" alt="Z">
     </div>
   </div>
 </div>
@@ -1043,6 +1358,79 @@ function createArrowCanvas(frameIndex, flipX) {
   img.src = 'assets/ui/ACSArrows.png';
   return canvas;
 }
+
+// ═══════════════════════════════════════════════════
+//  i18n
+// ═══════════════════════════════════════════════════
+// Chrome text only. Photo captions live in album_segments[.zh].json and are
+// resolved separately (see applyCaptions) because they are per-photo data, not
+// interface strings.
+//
+// Character names stay in Latin caps in both languages — that is what the official
+// Chinese localisation does, and it keeps the mixed-script look the game has.
+// Latin therefore keeps rendering in the OMORI font even in Chinese: the CJK font
+// sits *after* OMORI in the font stack, so it only picks up the glyphs OMORI lacks.
+// That is why there is no per-language font-family switch anywhere.
+const I18N = {
+  en: {
+    title: "BASIL'S PHOTO ALBUM",
+    hint: 'Besides clicking, you can also use Arrow keys / WASD to navigate, <br>Z / Enter / Space to confirm, and X / Esc to cancel, just like the game! <span class="nb">(・∀・)</span>',
+    warning: "WARNING: Major spoilers ahead. TRUTH ALBUM contains graphic imagery, body horror, and explicit depictions of death — the most disturbing content in OMORI. Proceed only if you're prepared.",
+    albums: { dreamworld: 'HEADSPACE', faraway: 'FARAWAY TOWN', blackspace: 'BLACKSPACE' },
+    stages: {
+      dreamworld: ['PROLOGUE', 'POST-RESET', 'CONSOLE'],
+      faraway: ['INITIAL', 'MARI BACK', 'FULL ALBUM', 'SCRIBBLED'],
+    },
+    legendRead: 'READ:',
+    legendView: 'VIEW:',
+    shiftRead: 'READ',
+    footer: 'Fan project · Art by u/MrMissingNoProdigy · OMORI © OMOCAT, LLC',
+    settingsTitle: 'SETTINGS',
+    langLabel: 'LANGUAGE',
+    tabs: { audio: 'AUDIO', lang: 'LANGUAGE' },
+    // Labels and help text lifted verbatim from languages/*/System.txt
+    // (optionsMenu.audio). The plugin appends the colon: `data.text + ':'`.
+    audio: [
+      { key: 'bgm', text: 'BGM VOLUME', help: 'Change the volume of the background music.' },
+      { key: 'bgs', text: 'BGS VOLUME', help: 'Change the volume of the background ambience.' },
+      { key: 'me',  text: 'ME VOLUME',  help: 'Change the volume of the musical effects.' },
+      { key: 'se',  text: 'SE VOLUME',  help: 'Change the volume of the sound effects.' },
+    ],
+    langHelp: 'Change the language of the interface and the photo descriptions.',
+  },
+  zh: {
+    title: 'BASIL 的相册',
+    hint: '除了点击，你也可以用方向键 / WASD 移动，<br>Z / Enter / Space 确认，还有 X / Esc 取消，就像游戏里一样！<span class="nb">(・∀・)</span>',
+    warning: '警告：前方严重剧透。TRUTH ALBUM 含有令人不安的黑白画面、身体恐怖、以及对死亡的直接呈现，是 OMORI 中最令人不适的内容。请做好准备再继续。',
+    albums: { dreamworld: '脑内世界', faraway: '遥远小镇', blackspace: '黑色空间' },
+    stages: {
+      dreamworld: ['序章', '重置之后', '主机'],
+      faraway: ['初始', '加上 MARI', '完整相册', '涂黑'],
+    },
+    legendRead: '阅读:',
+    legendView: '查看:',
+    shiftRead: '阅读',
+    footer: '同人项目 · 插画 by u/MrMissingNoProdigy · OMORI © OMOCAT, LLC',
+    settingsTitle: '设置',
+    langLabel: '语言',
+    tabs: { audio: '音频', lang: '语言' },
+    audio: [
+      { key: 'bgm', text: '背景音乐音量', help: '改变背景音乐的音量。' },
+      { key: 'bgs', text: '背景音效音量', help: '改变背景环境音效的音量。' },
+      { key: 'me',  text: '效果音乐音量', help: '改变效果音乐的音量。' },
+      { key: 'se',  text: '音效音量',     help: '改变声音效果的音量。' },
+    ],
+    langHelp: '更改界面与照片描述的语言。',
+  },
+};
+
+const LANG_KEY = 'omori-album-lang';
+// English is the default for a first-time visitor whatever their browser says: the
+// Chinese captions are a translation of a specific English source and the English
+// side is the one that has been proofread against the game. ?lang= overrides the
+// stored choice so a link can open straight into one language.
+let lang = (new URLSearchParams(location.search).get('lang')
+            || localStorage.getItem(LANG_KEY)) === 'zh' ? 'zh' : 'en';
 
 // ═══════════════════════════════════════════════════
 //  Data
@@ -1213,12 +1601,45 @@ function isDWClearReadHidden(num) {
       && !dwClearRevealed;
 }
 
-// Load segmented text data
+// Load segmented text data. The English file is the base and is always loaded; the
+// Chinese one is an *overlay* fetched on demand.
+const SEGMENTS = { en: null, zh: null };
+
 fetch('assets/album_segments.json?v=' + Date.now()).then(r => r.json()).then(data => {
-  ALBUMS.dreamworld.texts = data.dreamworld;
-  ALBUMS.faraway.texts = data.faraway;
-  ALBUMS.blackspace.texts = data.blackspace;
+  SEGMENTS.en = data;
+  applyCaptions();
 });
+
+// Keeping the translation in its own file means the English build never downloads
+// it. A missing file just means "nothing translated yet" and is not an error.
+function loadZhCaptions() {
+  if (SEGMENTS.zh) return Promise.resolve();
+  return fetch('assets/album_segments.zh.json?v=' + Date.now())
+    .then(r => r.ok ? r.json() : {})
+    .catch(() => ({}))
+    .then(data => { SEGMENTS.zh = data || {}; });
+}
+
+// Rebuild every album's `texts` for the active language. Index-aligned with the
+// English array — photoNum - 1 has to keep meaning the same thing (CLAUDE.md), so
+// the translation is applied positionally rather than by concatenating.
+//
+// Chinese does NOT fall back to English. An untranslated photo gets a null entry,
+// which photoHasText() reads as "nothing to read": the SHIFT prompt and the READ
+// legend hide themselves and pressing read does nothing. That is deliberate — the
+// Chinese build is meant to contain no English at all, and a half-translated album
+// reads worse than a quiet one. It leaves BLACKSPACE (placeholders in the game's own
+// files, in *both* languages) and the seven hand-written dreamworld entries silent
+// in Chinese; see updateBsDwellTimer() for what replaces the read on BS #24.
+function applyCaptions() {
+  if (!SEGMENTS.en) return;
+  for (const key of Object.keys(ALBUMS)) {
+    const base = SEGMENTS.en[key] || [];
+    if (lang !== 'zh') { ALBUMS[key].texts = base; continue; }
+    const zh = (SEGMENTS.zh && SEGMENTS.zh[key]) || [];
+    ALBUMS[key].texts = base.map((_, i) => (zh[i] && zh[i].length) ? zh[i] : null);
+  }
+}
 
 // Photo slot positions on the open book (from game code)
 // Left page: slots 0,1,2  Right page: slots 3,4,5
@@ -1340,6 +1761,7 @@ let _debugAnimTickFn = null;    // 内部用，当前调试动画的 tick 函数
 
 // Cursor bob animation
 let cursorBobAngle = 0;
+let setBobAngle = 0;   // settings cursor keeps its own phase; see SET_BOB_SPEED
 // Pause bob ONLY during animations that translate the cursor (viewer enter/exit, message
 // open/close). Page-turn animations don't move the cursor, so bob should keep going.
 let cursorBobPaused = false;
@@ -1355,12 +1777,37 @@ const BGM_FADE_MS = 600;      // each fade direction
 // Web Audio gives us gapless looping (HTMLAudioElement has a seam on loop).
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
+// 0..1 multipliers behind the four sliders. BGM/BGS are applied inside their layers
+// (they hold a persistent gain node); SE/ME are read here, at the moment a one-shot
+// is fired, because those gain nodes are created per playback and thrown away.
+const audioScale = { bgm: 1, bgs: 1, me: 1, se: 1 };
+
+// Safari's Web Audio cannot decode Ogg Vorbis — decodeAudioData rejects on it even
+// though <audio> plays the same file fine — so every track and every sound effect
+// silently failed to load there while Chrome was fine. Each .ogg therefore has an AAC
+// twin, and one probe decode at startup picks the extension for the whole session.
+// Feature detection rather than browser sniffing, and canPlayType() is no use here
+// because it answers for <audio>, not for decodeAudioData. The AAC files decode to
+// exactly the same length as their .ogg originals with no encoder priming, so BGM
+// loops stay gapless on both paths (measured, not assumed).
+let AUDIO_EXT = '.ogg';
+const audioFormatReady = fetch('assets/audio/sys_cursor1.ogg')
+  .then(r => r.arrayBuffer())
+  .then(buf => audioCtx.decodeAudioData(buf))
+  .catch(() => { AUDIO_EXT = '.m4a'; });
+
+const audioUrl = (base) => `assets/audio/${base}${AUDIO_EXT}`;
+
 // Generic looping-audio layer with crossfade between tracks. Used for BGM + BGS.
 function makeAudioLayer(defaultVol) {
   const cache = {};
   let source = null;
   let gain = null;
   let currentName = null;
+  // User volume as a 0..1 multiplier on top of the layer's mix level. The mix level
+  // is the balance between BGM and BGS and isn't user-facing; this is.
+  let scale = 1;
+  const target = () => defaultVol * scale;
   function ensureGain() {
     if (gain) return;
     gain = audioCtx.createGain();
@@ -1393,18 +1840,19 @@ function makeAudioLayer(defaultVol) {
       const t = audioCtx.currentTime;
       gain.gain.cancelScheduledValues(t);
       gain.gain.setValueAtTime(0, t);
-      gain.gain.linearRampToValueAtTime(defaultVol, t + fadeSec);
+      gain.gain.linearRampToValueAtTime(target(), t + fadeSec);
     };
     const swapAndStart = () => {
       if (currentName !== name) return;
       stop();
       if (!name) return;
       if (cache[name]) startSource(cache[name]);
-      else fetch(`assets/audio/${name}.ogg`)
+      else audioFormatReady
+        .then(() => fetch(audioUrl(name)))
         .then(r => r.arrayBuffer())
         .then(buf => audioCtx.decodeAudioData(buf))
         .then(buffer => { cache[name] = buffer; startSource(buffer); })
-        .catch(() => {});
+        .catch(e => console.warn('audio: could not load', name, e));
     };
     if (source) {
       // Crossfade: ramp current source to 0, then swap
@@ -1422,37 +1870,94 @@ function makeAudioLayer(defaultVol) {
     setTrack, stop,
     isPlaying: () => !!source,
     getCurrent: () => currentName,
+    // Ramped rather than assigned: stepping a gain by hand clicks, and holding an
+    // arrow key fires this every 100ms. 30ms is short enough to feel instant.
+    setScale(v) {
+      scale = v;
+      if (!gain) return;
+      const t = audioCtx.currentTime;
+      gain.gain.cancelScheduledValues(t);
+      gain.gain.setValueAtTime(gain.gain.value, t);
+      gain.gain.linearRampToValueAtTime(source ? target() : 0, t + 0.03);
+    },
   };
 }
 
 const bgmLayer = makeAudioLayer(BGM_VOLUME);
 const bgsLayer = makeAudioLayer(BGS_VOLUME);
+
+// Safari will not let an AudioContext produce sound until a BufferSource has been
+// started inside the *synchronous* call stack of a real user gesture. resume() alone
+// does not count, and neither does a source started from a fetch/decode callback —
+// which is every track and every sound effect here. The result is a context that
+// cheerfully reports state "running", with a source connected and a non-zero gain,
+// and emits nothing at all. Chrome has no such rule, which is why this only ever
+// showed up in Safari.
+//
+// So: on the very first gesture, synchronously start a one-sample silent buffer.
+// Nothing before the start() call may await, or the unlock lands outside the gesture
+// and is ignored. Deliberately not gated on musicEnabled — the unlock has to happen
+// on the first interaction whatever it was, since by the time the music button is
+// pressed we may already be inside a callback.
+let audioUnlocked = false;
+function unlockAudio() {
+  if (audioUnlocked) return;
+  try {
+    const src = audioCtx.createBufferSource();
+    src.buffer = audioCtx.createBuffer(1, 1, 22050);
+    src.connect(audioCtx.destination);
+    src.start(0);
+    audioUnlocked = true;
+  } catch (e) { /* retry on the next gesture */ }
+  audioCtx.resume();
+}
+['pointerdown', 'keydown', 'touchstart'].forEach(evt =>
+  window.addEventListener(evt, unlockAudio, { capture: true, passive: true }));
+
+// Safari also suspends the context whenever the tab loses focus and does not always
+// resume it on return, which left the page silent after alt-tabbing away and back.
+['visibilitychange', 'pointerdown', 'keydown'].forEach(evt => {
+  const tgt = evt === 'visibilitychange' ? document : window;
+  tgt.addEventListener(evt, () => {
+    if (document.hidden || !musicEnabled) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }, { passive: true });
+});
 function setBgm(name, fadeMs) { bgmLayer.setTrack(name, fadeMs); }
 function setBgs(name, fadeMs) { bgsLayer.setTrack(name, fadeMs); }
 const sfxBuffers = {}; // name → AudioBuffer (populated async)
-function loadSfx(name, url) {
-  fetch(url).then(r => r.arrayBuffer())
+// `base` is the filename without extension — audioFormatReady picks .ogg or .m4a.
+function loadSfx(name, base) {
+  audioFormatReady
+    .then(() => fetch(audioUrl(base)))
+    .then(r => r.arrayBuffer())
     .then(buf => audioCtx.decodeAudioData(buf))
     .then(decoded => { sfxBuffers[name] = decoded; })
-    .catch(() => {});
+    .catch(e => console.warn('audio: could not load sfx', base, e));
 }
+// The game splits one-shots into SE (sound effects) and ME (musical effects) with
+// separate volume sliders. The only ME-shaped cue here is the BLACKSPACE sting, so it
+// is tagged as one and everything else — cursor, select, cancel, page turn, buzzer,
+// text blips — rides the SE slider.
+const ME_SFX = new Set(['jumpscare']);
+
 function playSfxBuffer(name, volume = 0.9) {
   if (!musicEnabled || !sfxBuffers[name]) return;
   if (audioCtx.state === 'suspended') audioCtx.resume();
   const source = audioCtx.createBufferSource();
   source.buffer = sfxBuffers[name];
   const gain = audioCtx.createGain();
-  gain.gain.value = volume;
+  gain.gain.value = volume * (ME_SFX.has(name) ? audioScale.me : audioScale.se);
   source.connect(gain);
   gain.connect(audioCtx.destination);
   source.start(0);
 }
-loadSfx('pageTurn',  'assets/audio/SE_turn_page.ogg');
-loadSfx('cursor',    'assets/audio/sys_cursor1.ogg');
-loadSfx('select',    'assets/audio/SYS_select.ogg');
-loadSfx('cancel',    'assets/audio/sys_cancel.ogg');
-loadSfx('buzzer',    'assets/audio/sys_buzzer.ogg');
-loadSfx('jumpscare', 'assets/audio/SE_something_disappears.ogg');
+loadSfx('pageTurn',  'SE_turn_page');
+loadSfx('cursor',    'sys_cursor1');
+loadSfx('select',    'SYS_select');
+loadSfx('cancel',    'sys_cancel');
+loadSfx('buzzer',    'sys_buzzer');
+loadSfx('jumpscare', 'SE_something_disappears');
 const playPageTurnSfx = () => playSfxBuffer('pageTurn');
 const playCursorSfx   = () => playSfxBuffer('cursor');
 const playSelectSfx   = () => playSfxBuffer('select');
@@ -1460,11 +1965,12 @@ const playCancelSfx   = () => playSfxBuffer('cancel');
 const playBuzzerSfx   = () => playSfxBuffer('buzzer');
 // Text blip via same Web Audio pipeline. Game config: SYS_text, volume 50, pitch 100 ± 10.
 let textBlipBuffer = null;
-fetch('assets/audio/SYS_text.ogg')
+audioFormatReady
+  .then(() => fetch(audioUrl('SYS_text')))
   .then(r => r.arrayBuffer())
   .then(buf => audioCtx.decodeAudioData(buf))
   .then(decoded => { textBlipBuffer = decoded; })
-  .catch(() => {});
+  .catch(e => console.warn('audio: could not load text blip', e));
 
 function playTextBlip() {
   if (!musicEnabled || !textBlipBuffer) return;
@@ -1475,7 +1981,7 @@ function playTextBlip() {
   const pitchVar = 0.1;
   source.playbackRate.value = 1.0 + (Math.random() * 2 - 1) * pitchVar;
   const gain = audioCtx.createGain();
-  gain.gain.value = 0.3;
+  gain.gain.value = 0.3 * audioScale.se;
   source.connect(gain);
   gain.connect(audioCtx.destination);
   source.start(0);
@@ -1517,6 +2023,38 @@ window.addEventListener('DOMContentLoaded', () => {
   drawKeyIcons();
   updateSelectCursor(); // Set initial select background
   updateStageRollers();
+
+  applyVolumes();
+  document.querySelectorAll('.set-tab').forEach(el => {
+    el.addEventListener('click', () => {
+      setTab = el.dataset.tab; setFocus = 'tabs'; setItemIdx = 0;
+      playCursorSfx(); renderSettings();
+    });
+  });
+  // Arrow keys auto-repeat at the OS rate too; the plugin's own repeat is the one we
+  // want, so the browser's is ignored (e.repeat) and only the real keyup stops ours.
+  window.addEventListener('keyup', (e) => {
+    if (['ArrowLeft','ArrowRight','a','A','d','D'].includes(e.key)) stopSetRepeat();
+  });
+  window.addEventListener('blur', stopSetRepeat);
+  // Click-away close. pointerdown rather than click so it beats the select screen's
+  // own handlers, and the panel + gear are excluded so their own clicks still land.
+  //
+  // Capture phase, and that is load-bearing. In the bubble phase this ran *after* the
+  // volume bar's own pointerdown, which moves the cursor to that row and re-renders
+  // the list — detaching the very node the event targeted. closest() then walks a
+  // subtree that is no longer in the document, never reaches #settings-stage, and the
+  // panel closed itself the instant you pressed on a slider. Capturing runs first,
+  // while the target is still attached.
+  document.addEventListener('pointerdown', (e) => {
+    if (!settingsOpen()) return;
+    if (e.target.closest('#settings-stage, #settings-toggle')) return;
+    closeSettings();
+  }, true);
+  // Restores the stored language. Held until the overlay is in hand so the captions
+  // don't flip from English to Chinese a moment after the screen appears.
+  if (lang === 'zh') loadZhCaptions().then(() => applyLang('zh'));
+  else applyLang('en');
   // Force-parse the distort font right away so the first BS #24 read doesn't
   // pay font-load latency mid-message (which reflows the box). The <link
   // rel="preload"> fetches the bytes; this triggers the actual font parse +
@@ -1639,6 +2177,7 @@ function updatePageTurnHands() {
 let musicEnabled = false;
 
 function toggleMusic() {
+  unlockAudio();   // called from an onclick, so this is inside the gesture
   const btn = document.getElementById('music-toggle');
   musicEnabled = !musicEnabled;
   btn.classList.toggle('playing', musicEnabled);
@@ -1729,6 +2268,31 @@ function startLoop() {
     if (state === 'browsing' && !cursorBobPaused) {
       const bobX = Math.sin(cursorBobAngle * (Math.PI / 10)) * 2.9;
       $cursor.style.marginLeft = (bobX + 8) + 'px';
+    }
+
+    // Settings cursor bob. Sprite_WindowCustomCursor drives this by moving the
+    // sprite's *anchor*: anchor.x = sin(i * PI/(duration/2)) * 0.1 over duration 20
+    // at speed 0.5, so a full cycle is 40 frames and raising the anchor slides the
+    // sprite left by that fraction of its own 29px width — 2.9px of travel. Only the
+    // focused window's cursor animates (sprite._active = this.active), which is what
+    // leaves the greyed one on row 0 sitting still.
+    if (settingsOpen()) {
+      // The game runs its menu cursor at Sprite_WindowCustomCursor's defaults
+      // (amplitude 0.1, speed 0.5, duration 20) — a 40-frame round trip. Nothing in
+      // the game files is faster; the one override that exists, Omori Name Input's
+      // (0.15, 0.25), is slower still. SET_BOB_SPEED is therefore ours, not the
+      // game's: same 2.9px of travel, shorter period.
+      //
+      // The speed has to go into the step, not onto the shared angle. Scaling
+      // cursorBobAngle instead sampled sin() past its own period — the angle wraps at
+      // 20, so at 1.5x the phase reached 29.25 and snapped back to 0, cutting every
+      // cycle short three-quarters of the way through. On screen the hand slid right,
+      // jumped back left, and set off right again.
+      setBobAngle = (setBobAngle + 0.5 * SET_BOB_SPEED) % 20;
+      const setBob = -Math.sin(Math.floor(setBobAngle) * (Math.PI / 10)) * 2.9;
+      document.querySelectorAll('#settings-stage .set-hand:not(.idle)').forEach(h => {
+        h.style.transform = `translateX(${setBob}px)`;
+      });
     }
 
     // Select screen cursor bob — same sine, amp 2.9 (cursor width 29 × 0.1)
@@ -1904,7 +2468,7 @@ const SELECT_ROWS = '#album-select h1, .album-covers, .select-hint, .content-war
 // measuring either would feed back into the very scale it depends on. Their fixed
 // box widths are used instead.
 const MEASURED_ROWS = '#album-select h1, .album-covers';
-const HINT_BOX_W = 560; // keep in sync with the floor in .select-hint's width
+const HINT_BOX_W = 650; // keep in sync with the floor in .select-hint's width
 const WARN_BOX_W = 800; // keep in sync with the cap in .content-warning's max-width
 function selectContentWidth() {
   let w = 0;
@@ -1955,6 +2519,343 @@ function updateStageRollers() {
     roller.querySelector('.stage-left').classList.toggle('disabled', idx <= 0);
     roller.querySelector('.stage-right').classList.toggle('disabled', idx >= stages.length - 1);
   });
+}
+
+// ═══════════════════════════════════════════════════
+//  Language + settings panel
+// ═══════════════════════════════════════════════════
+function applyLang(next) {
+  lang = next === 'zh' ? 'zh' : 'en';
+  localStorage.setItem(LANG_KEY, lang);
+  document.documentElement.lang = lang === 'zh' ? 'zh-Hans' : 'en';
+  const t = I18N[lang];
+
+  document.querySelector('#album-select h1').textContent = t.title;
+  document.querySelector('.select-hint').innerHTML = t.hint;
+  document.querySelector('.content-warning-bs').textContent = t.warning;
+  document.getElementById('site-footer').textContent = t.footer;
+  document.querySelector('#legend-read .legend-label').textContent = t.legendRead;
+  document.querySelector('#legend-view .legend-label').textContent = t.legendView;
+  document.querySelector('#shift-read-prompt span').textContent = t.shiftRead;
+  renderSettings();
+
+  document.querySelectorAll('.album-cover-btn').forEach(btn => {
+    const k = btn.dataset.album;
+    if (!ALBUMS[k]) return;
+    ALBUMS[k].name = t.albums[k];
+    btn.querySelector('.album-cover-label').textContent = t.albums[k];
+  });
+
+  // stages[] is index-matched with stageData[] and changeAlbumStage() bounds-checks
+  // against its length, so a translation with the wrong number of entries would
+  // silently make a stage unreachable. Refuse the swap if the counts ever drift.
+  for (const k of Object.keys(t.stages)) {
+    const names = t.stages[k];
+    const expected = (ALBUMS[k].stageData || []).length;
+    if (names.length === expected) ALBUMS[k].stages = names.slice();
+    else console.warn(`i18n: ${lang}.stages.${k} has ${names.length} entries, expected ${expected} — keeping previous`);
+  }
+
+  applyCaptions();
+  updateStageRollers();
+  // Every measured row on the select screen just changed width and line count, so
+  // the fit has to be recomputed — see the select-screen notes in CLAUDE.md.
+  updateScale();
+}
+
+// Only reachable from the select screen (the gear is `body.on-select` only), so
+// there is never an open message box whose text would go stale on a swap. The panel
+// stays open afterwards — switching language is something you want to see the result
+// of, and closing on select made it feel like a menu you'd been kicked out of.
+function setLang(next) {
+  if (next === lang) return;
+  const ready = next === 'zh' ? loadZhCaptions() : Promise.resolve();
+  ready.then(() => {
+    setItemIdx = Math.max(0, SET_LANGS.indexOf(next));
+    applyLang(next);   // ends in renderSettings()
+  });
+}
+
+// ═══════════════════════════════════════════════════
+//  Settings screen (recreation of Scene_OmoMenuOptions)
+// ═══════════════════════════════════════════════════
+// Frame counts converted at 60fps, per the project's timing convention. These are
+// RPG Maker MV's own Input constants, which OMORI does not override:
+//   keyRepeatWait     24 frames — how long a key must be held before it repeats,
+//                                 and also what Input.isLongPressed() tests
+//   keyRepeatInterval  6 frames — the repeat period once it is holding
+// The plugin reads `Input.isLongPressed('right') ? 5 : 1`, so the first press moves
+// one step and everything after the hold threshold moves five.
+const SET_REPEAT_WAIT_MS = Math.round(24 / 60 * 1000);      // 400
+const SET_REPEAT_INTERVAL_MS = Math.round(6 / 60 * 1000);   // 100
+const SET_STEP = 1;
+const SET_STEP_FAST = 5;
+
+// Defaults are the game's own (Omori BASE.js: bgmVolume 70, the rest 90). A percent
+// here scales that channel's mix level, not absolute output — 70 means 70% of
+// BGM_VOLUME, so the balance between the channels is preserved.
+const VOL_DEFAULTS = { bgm: 70, bgs: 90, me: 90, se: 90 };
+const volumePct = {};
+for (const k of Object.keys(VOL_DEFAULTS)) {
+  const v = parseInt(localStorage.getItem('omori-album-vol-' + k), 10);
+  volumePct[k] = Number.isFinite(v) && v >= 0 && v <= 100 ? v : VOL_DEFAULTS[k];
+}
+
+const SET_BOB_SPEED = 1.5; // multiplier on the game's 0.5/frame cursor sine
+const SET_ROW_TOP = 2;     // breathing room above the first row
+// The game's itemHeight is 75, which leaves a wide channel between one bar and the
+// next label because our rows carry a label and a bar and nothing else. 64 closes it
+// up; it is the one number that sets how tight the four rows sit.
+const SET_ROW_PITCH = 70;
+const SET_LANGS = ['en', 'zh'];
+let setTab = 'audio';      // which category is selected
+let setFocus = 'tabs';     // 'tabs' | 'items' — which window has the cursor
+let setItemIdx = 0;
+
+function applyVolumes() {
+  for (const k of Object.keys(volumePct)) audioScale[k] = volumePct[k] / 100;
+  bgmLayer.setScale(audioScale.bgm);
+  bgsLayer.setScale(audioScale.bgs);
+}
+
+function settingsOpen() {
+  return document.getElementById('settings-screen').classList.contains('open');
+}
+
+function openSettings() {
+  playSelectSfx();   // the game's confirm cue — opening a menu is a confirm
+  document.body.classList.add('settings-open');
+  document.getElementById('settings-screen').classList.add('open');
+  document.getElementById('settings-toggle').classList.add('open');
+  setFocus = 'tabs';
+  renderSettings();
+}
+
+function closeSettings() {
+  if (settingsOpen()) playCancelSfx();   // only when there was something to close
+  stopSetRepeat();
+  document.body.classList.remove('settings-open');
+  document.getElementById('settings-screen').classList.remove('open');
+  document.getElementById('settings-toggle').classList.remove('open');
+}
+
+function toggleSettings() {
+  settingsOpen() ? closeSettings() : openSettings();
+}
+
+function renderSettings() {
+  const t = I18N[lang];
+  document.querySelectorAll('.set-tab').forEach(el => {
+    el.querySelector('.set-tab-label').textContent = t.tabs[el.dataset.tab];
+    el.classList.toggle('active', el.dataset.tab === setTab && setFocus === 'tabs');
+  });
+
+  const $items = document.getElementById('set-items');
+  // The cursor never leaves the option window — the game deactivates it rather than
+  // deselecting it, which greys the hand and freezes it (see .set-hand.idle). So the
+  // selected row always carries a hand; only its state changes with focus.
+  const handFor = (on) => `<img class="set-hand${on && setFocus === 'items' ? '' : ' idle'}"
+      src="assets/ui/cursor_menu.png" alt=""${on ? '' : ' hidden'}>`;
+
+  if (setTab === 'audio') {
+    // SET_ROW_TOP shifts the whole column down so the first label isn't flush against
+    // the window's inner edge. The hand lives inside .set-item, so it follows without
+    // a second offset to keep in sync.
+    $items.innerHTML = t.audio.map((row, i) => `
+      <div class="set-item" style="top:${SET_ROW_TOP + i * SET_ROW_PITCH}px">
+        ${i === setItemIdx ? handFor(true) : ''}
+        <div class="set-item-header">${row.text}:</div>
+        <div class="set-bar"><div class="set-bar-fill" style="width:${volumePct[row.key] * 4}px"></div></div>
+        <div class="set-percent">${volumePct[row.key]}%</div>
+      </div>`).join('');
+    wireVolumeDrag($items);
+  } else {
+    // Both languages on one line. The greyed hand marks which language is *active*,
+    // the live one marks where the cursor is — with only one hand it was impossible
+    // to tell the current setting from the thing you were about to pick.
+    // Exactly one hand, always. With focus on the list it is the live red one at the
+    // cursor; with focus on the category bar it is the frozen grey one on whichever
+    // language is actually active. Showing both at once — cursor *and* current
+    // setting — is what made a switch look like it had left a hand behind.
+    const handOn = setFocus === 'items' ? SET_LANGS[setItemIdx] : lang;
+    const opt = (code, label, x) => `
+      <span class="set-opt-box" style="left:${x}px">
+        ${code === handOn
+          ? `<img class="set-hand${setFocus === 'items' ? '' : ' idle'}" src="assets/ui/cursor_menu.png" alt="">`
+          : ''}
+        <span class="set-opt" data-lang="${code}">${label}</span>
+      </span>`;
+    $items.innerHTML = `
+      <div class="set-item" style="top:${SET_ROW_TOP}px">
+        ${opt('en', 'English', 55)}${opt('zh', '简体中文', 255)}
+      </div>`;
+    $items.querySelectorAll('.set-opt').forEach(el => {
+      // Clicking an option also takes focus, exactly as pressing Z would — otherwise a
+      // mouse user could switch language while the cursor still belonged to the
+      // category bar, leaving the two out of step. X backs out as usual.
+      el.addEventListener('click', () => {
+        playSelectSfx();
+        setFocus = 'items';
+        setItemIdx = Math.max(0, SET_LANGS.indexOf(el.dataset.lang));
+        if (el.dataset.lang === lang) renderSettings();  // already active: just take focus
+        else setLang(el.dataset.lang);                   // setLang ends in renderSettings
+      });
+    });
+  }
+
+  // The game shows no help while the category bar has focus — Window_OmoMenuOptions-
+  // Category.callUpdateHelp only swaps which option window is visible, it never sets
+  // help text. Help belongs to the selected *option*.
+  document.getElementById('set-help').textContent =
+    setFocus !== 'items' ? ''
+      : (setTab === 'audio' ? t.audio[setItemIdx].help : t.langHelp);
+}
+
+// Mirrors the plugin's updateVolumeBar: the lit sprite's frame width is volume * 4,
+// i.e. one 4px tick per percent, and the percentage is redrawn beside it. Only the
+// touched row is rewritten — a full re-render would rebuild the hand mid-animation
+// and drop the drag's listeners.
+function updateVolumeBar(i) {
+  const row = document.querySelectorAll('#set-items .set-item')[i];
+  if (!row) return;
+  const key = I18N[lang].audio[i].key;
+  row.querySelector('.set-bar-fill').style.width = (volumePct[key] * 4) + 'px';
+  row.querySelector('.set-percent').textContent = volumePct[key] + '%';
+}
+
+// Keyboard path: relative steps on the selected row. One blip per step, unthrottled —
+// that is the game's behaviour and a keypress can't outrun it. (The drag path in
+// setVolumeTo rate-limits instead; it crosses a percent every few pixels.)
+function changeVolume(dir, fast) {
+  const key = I18N[lang].audio[setItemIdx].key;
+  const before = volumePct[key];
+  volumePct[key] = Math.max(0, Math.min(100, before + dir * (fast ? SET_STEP_FAST : SET_STEP)));
+  if (volumePct[key] === before) return;
+  localStorage.setItem('omori-album-vol-' + key, String(volumePct[key]));
+  applyVolumes();
+  updateVolumeBar(setItemIdx);
+  playCursorSfx();
+}
+
+// Click or drag anywhere on a bar to set that channel directly. The keyboard path
+// steps by 1/5; this one is absolute — the value is wherever the pointer is.
+// A drag crosses a percent every few pixels, and one cursor blip per percent is a
+// machine-gun. Rate-limit to roughly the keyboard's own repeat interval so a drag
+// ticks at about the speed holding an arrow key does. The keyboard path is left
+// alone — it already fires at most one blip per step, which is what the game does.
+let lastVolSfxAt = 0;
+const VOL_SFX_MIN_GAP_MS = SET_REPEAT_INTERVAL_MS;
+
+function setVolumeTo(i, pct) {
+  const key = I18N[lang].audio[i].key;
+  pct = Math.max(0, Math.min(100, Math.round(pct)));
+  if (volumePct[key] === pct) return;
+  volumePct[key] = pct;
+  localStorage.setItem('omori-album-vol-' + key, String(pct));
+  applyVolumes();
+  updateVolumeBar(i);
+  const now = performance.now();
+  if (now - lastVolSfxAt >= VOL_SFX_MIN_GAP_MS) { lastVolSfxAt = now; playCursorSfx(); }
+}
+
+function wireVolumeDrag($items) {
+  $items.querySelectorAll('.set-bar').forEach((bar, i) => {
+    bar.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      // Both of these are read once, up front, and deliberately: moving the cursor to
+      // this row re-renders the list and throws the node away, and the drag has to
+      // survive that. Holding the rect rather than the element also means the move
+      // handler never touches layout. The bar cannot move mid-drag, so it stays valid.
+      const rect = bar.getBoundingClientRect();
+      if (setFocus !== 'items' || setItemIdx !== i) {
+        setFocus = 'items'; setItemIdx = i; renderSettings();
+      }
+      const at = (x) => setVolumeTo(i, ((x - rect.left) / rect.width) * 100);
+      at(e.clientX);
+      // On window, not on the bar: the pointer spends most of a drag off the ends of
+      // a 400px bar, and pointer capture would be lost with the node anyway.
+      const move = (ev) => at(ev.clientX);
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', up);
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', up);
+    });
+  });
+}
+
+// Hold-to-repeat, modelled on Input.isRepeated: fire once immediately, wait
+// keyRepeatWait, then fire every keyRepeatInterval — and from that point the key
+// counts as long-pressed, so the step goes to 5.
+let setRepeat = null;
+
+function startSetRepeat(fn) {
+  stopSetRepeat();
+  fn(false);
+  setRepeat = { timer: null, interval: null };
+  setRepeat.timer = setTimeout(() => {
+    setRepeat.interval = setInterval(() => fn(true), SET_REPEAT_INTERVAL_MS);
+  }, SET_REPEAT_WAIT_MS);
+}
+
+function stopSetRepeat() {
+  if (!setRepeat) return;
+  clearTimeout(setRepeat.timer);
+  clearInterval(setRepeat.interval);
+  setRepeat = null;
+}
+
+function settingsKey(e) {
+  const k = e.key;
+  const left = k === 'ArrowLeft' || k === 'a' || k === 'A';
+  const right = k === 'ArrowRight' || k === 'd' || k === 'D';
+  const up = k === 'ArrowUp' || k === 'w' || k === 'W';
+  const down = k === 'ArrowDown' || k === 's' || k === 'S';
+  const ok = k === 'z' || k === 'Z' || k === 'Enter' || k === ' ';
+  const cancel = k === 'x' || k === 'X' || k === 'Escape';
+  const TABS = ['audio', 'lang'];
+
+  if (cancel) {
+    if (setFocus === 'items') { setFocus = 'tabs'; playCancelSfx(); renderSettings(); }
+    else { closeSettings(); }   // closeSettings plays the cancel cue itself
+    return;
+  }
+  if (setFocus === 'tabs') {
+    if (left || right) {
+      const i = TABS.indexOf(setTab) + (right ? 1 : -1);
+      if (i < 0 || i >= TABS.length) return;
+      setTab = TABS[i]; setItemIdx = 0; playCursorSfx(); renderSettings();
+    } else if (ok || down) {
+      setFocus = 'items';
+      setItemIdx = setTab === 'lang' ? Math.max(0, SET_LANGS.indexOf(lang)) : 0;
+      playSelectSfx(); renderSettings();
+    }
+    return;
+  }
+  // ── inside the option list ──
+  if (setTab === 'audio') {
+    if (up && setItemIdx === 0) { setFocus = 'tabs'; playCancelSfx(); renderSettings(); return; }
+    if (up || down) {
+      const next = setItemIdx + (down ? 1 : -1);
+      if (next < 0 || next >= I18N[lang].audio.length) return;
+      setItemIdx = next; playCursorSfx(); renderSettings(); return;
+    }
+    if (left || right) startSetRepeat(fast => changeVolume(right ? 1 : -1, fast));
+    return;
+  }
+  // Language: both options share one row, so it is left/right that moves between them.
+  if (up) { setFocus = 'tabs'; playCancelSfx(); renderSettings(); return; }
+  if (left || right) {
+    const next = setItemIdx + (right ? 1 : -1);
+    if (next < 0 || next >= SET_LANGS.length) return;
+    setItemIdx = next; playCursorSfx(); renderSettings();
+  } else if (ok) {
+    playSelectSfx();
+    setLang(SET_LANGS[setItemIdx]);
+  }
 }
 
 // Click-triggered stage change (used by arrows)
@@ -2749,6 +3650,7 @@ function startViewing() {
   $shiftRead.style.opacity = (hasTextStart && !readHiddenStart) ? '1' : '0';
   $shiftRead.style.pointerEvents = hasTextStart ? '' : 'none';
   $shiftRead.classList.toggle('has-outline', album.readOutline);
+  updateBsDwellTimer();
 
   // ── Debug frame-step mode ──
   if (typeof DEBUG_FRAME !== 'undefined' && DEBUG_FRAME) {
@@ -2860,6 +3762,7 @@ function endViewing() {
   photoFlipped = false;
   animating = true;
   state = 'browsing';
+  updateBsDwellTimer();   // must come after the state change, or it would re-arm itself
   cursorBobPaused = true; // cursor slides back from translateY(500px) to 0; pause bob
 
   // Easter egg discovery: unlock the blurry thumbnail (session-only). Discovery is normally
@@ -3021,6 +3924,7 @@ function slideViewingPhoto(dir) {
 
   // New photo slides in on top from the side
   viewingIdx = newIdx;
+  updateBsDwellTimer();   // navigating within the viewer re-arms for the new photo
   const num = photoNumAtIdx(viewingIdx);
   const newSrc = fullUrl(album, num);
 
@@ -3138,6 +4042,16 @@ function flipPhoto() {
 // ═══════════════════════════════════════════════════
 //  Message (READ description)
 // ═══════════════════════════════════════════════════
+// An inline segment continues the previous one on the same line. The game's source
+// carries the separating space inside the text (`...MARI.\! So exciting!`) and the
+// converter trims it off each segment, so the renderer puts it back — but only where
+// a space belongs. Chinese doesn't separate clauses with one, and inserting it turned
+// the game's "派对帽……也……太多了……" into "派对帽…… 也…… 太多了……".
+const CJK_RE = /[\u3000-\u303f\u3040-\u30ff\u4e00-\u9fff\uff00-\uffef]/;
+function inlineNeedsSpace(text) {
+  return !CJK_RE.test((text || '')[0] || '');
+}
+
 function showMessage(boxes) {
   messageReturnTo = state;
   state = 'message';
@@ -3218,7 +4132,7 @@ function typewriteLine() {
     : (s) => s;
 
   if (msgSkipMode) {
-    const prefix = isInline && msgPrevLines ? ' ' : '';
+    const prefix = (isInline && msgPrevLines && inlineNeedsSpace(text)) ? ' ' : '';
     const fullLine = msgPrevLines + prefix + wrap(text.replace(/\n/g, '<br>'));
     $msgText.innerHTML = fullLine;
     msgPrevLines = fullLine;
@@ -3233,7 +4147,7 @@ function typewriteLine() {
   // Pre-split into chunks
   const chunks = [];
   // If inline, add a space before the text (continues on same line)
-  if (isInline && msgPrevLines) {
+  if (isInline && msgPrevLines && inlineNeedsSpace(text)) {
     chunks.push(' ');
   }
   for (let i = 0; i < text.length; i++) {
@@ -3276,9 +4190,8 @@ function typewriteLine() {
       msgTyping = false;
       // Save accumulated text
       // If inline, no <br> at the end (next segment continues on same line or adds its own <br>)
-      const separator = isInline ? ' ' : '<br>';
       const renderedText = text.replace(/\n/g, '<br>');
-      const inlineSpace = (isInline && prefix) ? ' ' : '';
+      const inlineSpace = (isInline && prefix && inlineNeedsSpace(text)) ? ' ' : '';
       msgPrevLines = prefix + inlineSpace + wrap(renderedText);
       // Only add <br> if next entry exists and is not inline
       const nextEntry = msgLineIdx + 1 < box.length ? box[msgLineIdx + 1] : null;
@@ -3307,7 +4220,7 @@ function advanceMessage() {
     const entry = box[msgLineIdx];
     const text = entry.text;
     const isInline = entry.inline;
-    const prefix = isInline && msgPrevLines ? ' ' : '';
+    const prefix = (isInline && msgPrevLines && inlineNeedsSpace(text)) ? ' ' : '';
     const wrap = entry.effect
       ? (s) => `<span class="text-${entry.effect}">${s}</span>`
       : (s) => s;
@@ -3431,7 +4344,7 @@ function closeMessage() {
       // Viewing (zoom) mode — no book slide-back, trigger directly after message close.
       startBsJumpscare();
     }
-  }, 130);
+  }, JUMPSCARE_CLOSE_MS);
 }
 
 // ═══════════════════════════════════════════════════
@@ -3461,7 +4374,48 @@ function whenSelectGifReady(timeoutMs, done) {
   $gif.addEventListener('error', finish);
 }
 
-function startBsJumpscare() {
+// Game (Map318.json event 6): 200 frames of nothing before the scare. Frame counts
+// converted at 60fps, per the timing convention. closeMessage()'s own 130ms box-close
+// animation already runs inside that window and has to come off the top, so what the
+// player actually experiences — dismissing the box to the scare landing — is the full
+// 3333ms rather than 3333 on top of it.
+const JUMPSCARE_TOTAL_MS = Math.round(200 / 60 * 1000);              // 3333
+const JUMPSCARE_CLOSE_MS = 130;
+const JUMPSCARE_WAIT_MS = JUMPSCARE_TOTAL_MS - JUMPSCARE_CLOSE_MS;   // 3203
+
+// ── Dwell trigger (used when #24 has no readable text, i.e. in Chinese) ──
+// The scare normally hangs off closing the message box. With nothing to read there is
+// no such moment, so it hangs off simply staying on the photo instead — for the same
+// JUMPSCARE_TOTAL_MS the English path spends between the box closing and the scare.
+// The timer is armed on arrival and cleared on every departure, so leaving the photo
+// and coming back restarts the wait rather than accumulating toward it.
+let bsDwellTimer = null;
+
+function bsDwellArmed() {
+  return state === 'viewing'
+    && album === ALBUMS.blackspace
+    && photoNumAtIdx(viewingIdx) === 24
+    // Readable → the closeMessage path owns the trigger and this must stay out of it,
+    // or English would get two timers racing.
+    && !photoHasText(viewingIdx)
+    && !bsJumpscareTriggered;
+}
+
+function updateBsDwellTimer() {
+  if (bsDwellTimer) { clearTimeout(bsDwellTimer); bsDwellTimer = null; }
+  if (!bsDwellArmed()) return;
+  bsDwellTimer = setTimeout(() => {
+    bsDwellTimer = null;
+    // Re-check on the way out rather than trying to disarm from every exit path there
+    // is (back to select, album swap, a future one nobody remembers to wire up). If
+    // the player is no longer sitting on that photo, the wait simply didn't complete.
+    if (!bsDwellArmed()) return;
+    bsJumpscareTriggered = true;
+    startBsJumpscare(0);   // the dwell *was* the wait
+  }, JUMPSCARE_TOTAL_MS);
+}
+
+function startBsJumpscare(waitMs = JUMPSCARE_WAIT_MS) {
   animating = true;
   const $js = document.getElementById('jumpscare-overlay');
 
@@ -3491,7 +4445,7 @@ function startBsJumpscare() {
         });
       }, 5000);
     }, 500);
-  }, 3000);
+  }, waitMs);
 }
 
 function snapToSelectScreen() {
@@ -3734,6 +4688,15 @@ document.addEventListener('keydown', (e) => {
   // ── Debug frame-step: press Enter to advance one frame ──
   if (typeof DEBUG_FRAME !== 'undefined' && DEBUG_FRAME && e.key === 'Enter' && _debugAnimTickFn) {
     requestAnimationFrame(_debugAnimTickFn);
+    return;
+  }
+
+  // The settings panel swallows input while open — otherwise Esc would close the
+  // panel *and* cancel out of the select screen, and arrow keys would move the album
+  // cursor behind a panel the user is looking at.
+  if (settingsOpen()) {
+    if (!e.repeat) settingsKey(e);   // our own repeat timer owns held keys
+    e.preventDefault();
     return;
   }
 
