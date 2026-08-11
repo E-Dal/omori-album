@@ -454,6 +454,12 @@
     height: calc(30px * var(--scale, 1));
     background: #000;
     border-bottom: calc(3px * var(--scale, 1)) solid #fff;
+    /* The 1px black outline every other window carries under its white border. The
+       bar spans the whole viewport from top: 0, so the outline's top and side edges
+       fall outside the window and only the bottom one is ever seen. Scaled by hand
+       because this bar lives in window space — the other windows are inside #scene
+       and get their 1px multiplied by the stage transform instead. */
+    outline: calc(1px * var(--scale, 1)) solid #000;
     display: none;
     align-items: center; justify-content: center;
     z-index: 30;
