@@ -971,6 +971,56 @@
 
 <script>
 // ═══════════════════════════════════════════════════
+//  Sprite-atlas loading (with retry)
+// ═══════════════════════════════════════════════════
+// The covers / arrows / key icons are *canvas* art: each is cropped out of an atlas
+// once, inside a single img.onload. That makes a failed fetch permanent — unlike an
+// <img> or a CSS background, a blank canvas gives the browser nothing to re-request,
+// so it stays blank for the whole session even after the server comes back. (This is
+// exactly how all three album covers vanished during a Pages outage while every other
+// asset on the select screen recovered.) So: back off and retry, and once the ladder
+// is exhausted, wait for the network to come back and run it again.
+//
+// Costs nothing when the fetch succeeds: no polling, no timer, no listener — the whole
+// retry apparatus only ever comes into existence inside an `error` handler. The rounds
+// cap is what keeps a *permanently* missing file (a renamed asset, say) from re-running
+// the ladder on every tab refocus forever; three rounds is plenty to ride out an outage,
+// and past that the file is gone, not the network.
+const IMG_RETRY_DELAYS = [400, 1200, 3000, 8000];
+const IMG_RETRY_ROUNDS = 3;
+
+function loadAtlas(src, draw, attempt = 0, round = 0) {
+  const img = new Image();
+  img.onload = () => draw(img);
+  img.onerror = () => {
+    if (attempt < IMG_RETRY_DELAYS.length) {
+      setTimeout(() => loadAtlas(src, draw, attempt + 1, round), IMG_RETRY_DELAYS[attempt]);
+    } else if (round + 1 < IMG_RETRY_ROUNDS) {
+      retryWhenBack(() => loadAtlas(src, draw, 0, round + 1));
+    }
+  };
+  // Cache-bust every retry: an outage can leave an error response (or a truncated body)
+  // in the HTTP cache, and re-requesting a URL we've already asked for would just re-read
+  // it. The round is in the key too, so round 2 doesn't re-read round 1's failures.
+  const bust = round || attempt ? `${src.includes('?') ? '&' : '?'}r=${round}.${attempt}` : '';
+  img.src = src + bust;
+}
+
+// One-shot: fires on the first sign the connection is back — the browser's `online`
+// event, or the user returning to the tab. Both listeners are dropped on the first
+// fire, so a permanently-dead asset costs one pair of listeners, not a growing pile.
+function retryWhenBack(fn) {
+  const go = () => {
+    window.removeEventListener('online', go);
+    document.removeEventListener('visibilitychange', onVis);
+    fn();
+  };
+  const onVis = () => { if (!document.hidden) go(); };
+  window.addEventListener('online', go);
+  document.addEventListener('visibilitychange', onVis);
+}
+
+// ═══════════════════════════════════════════════════
 //  Arrow icon rendering (ACSArrows is 128x29, 4 frames of 32x29)
 //  Frame 0: pointing hand (left), Frame 1: right arrow, Frame 2: left arrow, Frame 3: hand (right?)
 // ═══════════════════════════════════════════════════
@@ -1548,12 +1598,11 @@ let arrowImgRed = null;
 let arrowImgWhite = null;
 
 function drawArrowIcons() {
-  arrowImgRed = new Image();
-  arrowImgWhite = new Image();
-  let loaded = 0;
+  // Both variants have to be in hand before the first draw — updatePageTurnHands()
+  // swaps between them and bails if either is missing. Each retries on its own, so a
+  // late-arriving white atlas still triggers the initial red draw when it lands.
   function onLoad() {
-    loaded++;
-    if (loaded < 2) return;
+    if (!arrowImgRed || !arrowImgWhite) return;
     // Initial draw: all use red (default active state)
     document.querySelectorAll('.arrow-icon').forEach(canvas => {
       const ctx = canvas.getContext('2d');
@@ -1561,11 +1610,12 @@ function drawArrowIcons() {
       const frame = parseInt(canvas.dataset.frame) || 0;
       ctx.drawImage(arrowImgRed, frame * 32, 0, 32, 29, 0, 0, 32, 29);
     });
+    // If the atlases only landed on a retry, an album may already be open — put the
+    // page-turn hands back to the red/white state that page actually calls for.
+    if (album) updatePageTurnHands();
   }
-  arrowImgRed.onload = onLoad;
-  arrowImgWhite.onload = onLoad;
-  arrowImgRed.src = 'assets/ui/ACSArrows.png';
-  arrowImgWhite.src = 'assets/ui/ACSArrows_white.png';
+  loadAtlas('assets/ui/ACSArrows.png', (img) => { arrowImgRed = img; onLoad(); });
+  loadAtlas('assets/ui/ACSArrows_white.png', (img) => { arrowImgWhite = img; onLoad(); });
 }
 
 // Redraw a page-turn hand as red (active) or white (disabled)
@@ -1610,20 +1660,17 @@ const playSfx = playPageTurnSfx;
 
 function drawKeyIcons() {
   document.querySelectorAll('.page-key-icon').forEach(canvas => {
-    const img = new Image();
-    img.onload = () => {
+    loadAtlas(canvas.dataset.src, (img) => {
       const ctx = canvas.getContext('2d');
       ctx.imageSmoothingEnabled = false;
       // strip2 = 2 frames of 24x24, use first frame (up state)
       ctx.drawImage(img, 0, 0, 24, 24, 0, 0, 24, 24);
-    };
-    img.src = canvas.dataset.src;
+    });
   });
 }
 
 function drawCovers() {
-  const img = new Image();
-  img.onload = () => {
+  loadAtlas('assets/ui/PhotoAlbumCovers.png', (img) => {
     const cw = 241, ch = 325;
     // Atlas order in PhotoAlbumCovers.png: 0=Faraway, 1=Dreamworld, 2=BlackSpace
     const frames = {'cover-fa': 0, 'cover-dw': 1, 'cover-bs': 2};
@@ -1634,8 +1681,7 @@ function drawCovers() {
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(img, frames[id] * cw, 0, cw, ch, 0, 0, cw, ch);
     });
-  };
-  img.src = 'assets/ui/PhotoAlbumCovers.png';
+  });
 }
 
 // ═══════════════════════════════════════════════════
