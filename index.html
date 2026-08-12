@@ -4044,10 +4044,16 @@ function slideViewingPhoto(dir) {
     oldImg.style.setProperty('transition', 'opacity 0.42s cubic-bezier(0.55, 0, 1, 0.45)', 'important');
     $viewer.appendChild(oldImg);
 
-    // Fade out old photo
-    requestAnimationFrame(() => {
-      oldImg.style.opacity = '0';
-    });
+    // Fade out old photo. The forced layout read is what makes it a fade at all: a
+    // freshly inserted element has never had its style resolved, so the browser has no
+    // start value to transition from and coalesces the insert and the opacity change
+    // into one update — the transition is skipped and the old photo vanishes on the
+    // frame the new one starts sliding. Reading offsetHeight resolves style while it is
+    // still opaque, giving the transition its 1 to animate from. requestAnimationFrame
+    // was doing this job before and isn't reliable for it: the callback can run before
+    // the frame's style recalc, which is exactly the case being avoided.
+    void oldImg.offsetHeight;
+    oldImg.style.opacity = '0';
 
     // Set up slide-in position first, then change src (already decoded → paints immediately)
     $viewerPhoto.style.transition = 'none';
