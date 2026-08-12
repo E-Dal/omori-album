@@ -72,6 +72,18 @@
         66% -> 15.1px, 1.25x
         65% -> 14.9px, 1.23x
         64% -> 14.6px, 1.21x   <- here */
+  /* The nine glyphs an English reader can actually hit that OMORI_GAME2 lacks: the
+     credit line's © and ·, the content warning's em dash, the kaomoji's ∀ and ・, and
+     the two language labels in the settings panel. Without this the whole 154KB
+     Chinese face was pulled onto the critical path of an English visit — for a
+     kaomoji. 1.6KB instead, and XIAOLAI now loads only when Chinese actually renders.
+     Ordered before XIAOLAI in every stack, so it wins these codepoints. */
+  @font-face {
+    font-family: 'EXTRAS';
+    src: url('assets/ui/extras_subset.woff2') format('woff2');
+    size-adjust: 66%;
+    font-display: swap;
+  }
   @font-face {
     font-family: 'XIAOLAI';
     src: url('assets/ui/xiaolai_subset.woff2') format('woff2');
@@ -105,7 +117,7 @@
        measure that was a character too generous. */
     padding-right: 32px;
   }
-  .text-distort { font-family: 'OMORI_TITLE', 'XIAOLAI', sans-serif; }
+  .text-distort { font-family: 'OMORI_TITLE', 'EXTRAS', 'XIAOLAI', sans-serif; }
   /* The distort face has no CJK either, so it needs the same fallback. */
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -114,7 +126,7 @@
     width: 100vw; height: 100vh;
     user-select: none;
     -webkit-user-select: none;
-    font-family: 'OMORI', 'XIAOLAI', sans-serif;
+    font-family: 'OMORI', 'EXTRAS', 'XIAOLAI', sans-serif;
   }
 
   /* ── Site footer credit ── */
@@ -125,7 +137,7 @@
     z-index: 998;
     padding: 6px 10px;
     text-align: center;
-    font-family: 'OMORI', 'XIAOLAI', sans-serif;
+    font-family: 'OMORI', 'EXTRAS', 'XIAOLAI', sans-serif;
     font-size: 17px;
     letter-spacing: 1px;
     color: #fff;
@@ -146,7 +158,7 @@
   #parallax-bg {
     position: fixed; inset: 0; z-index: 0;
     background-size: auto 100%; background-repeat: repeat-x;
-    background-image: url('assets/ui/Faraway_polaroidBG_FA_day.png');
+    background-image: url('assets/ui/Faraway_polaroidBG_FA_day.webp');
   }
   /* Hide parallax layers on select screen (select-bg takes over) */
   body.on-select #parallax-bg,
@@ -609,7 +621,7 @@
     width: 640px; height: 480px;
     transform: translate(-50%, -50%) scale(var(--scale, 1));
     transform-origin: center center;
-    background-image: url('assets/ui/mari_something_transform.png');
+    background-image: url('assets/ui/mari_something_transform.webp');
     background-size: 1920px 960px;
     background-repeat: no-repeat;
     background-position: 0 0;
@@ -751,7 +763,7 @@
     flex: none;
     transform: scale(var(--scale, 1));
     transform-origin: center center;
-    font-family: 'OMORI', 'XIAOLAI', sans-serif;
+    font-family: 'OMORI', 'EXTRAS', 'XIAOLAI', sans-serif;
     color: #fff;
   }
   html[lang^="zh"] #settings-stage { font-family: 'XIAOLAI', sans-serif; }
@@ -1149,7 +1161,7 @@
         </div>
         <canvas id="cover-dw" width="241" height="325"></canvas>
         <div class="album-cover-label">HEADSPACE</div>
-        <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
+        <img class="select-cursor" src="assets/ui/cursor_menu.webp" alt="">
       </div>
       <div class="album-cover-btn" data-album="faraway">
         <div class="stage-roller" data-album="faraway">
@@ -1159,7 +1171,7 @@
         </div>
         <canvas id="cover-fa" width="241" height="325"></canvas>
         <div class="album-cover-label">FARAWAY TOWN</div>
-        <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
+        <img class="select-cursor" src="assets/ui/cursor_menu.webp" alt="">
       </div>
       <div class="album-cover-btn" data-album="blackspace">
         <div class="stage-roller" data-album="blackspace">
@@ -1169,7 +1181,7 @@
         </div>
         <canvas id="cover-bs" width="241" height="325"></canvas>
         <div class="album-cover-label">BLACKSPACE</div>
-        <img class="select-cursor" src="assets/ui/cursor_menu.png" alt="">
+        <img class="select-cursor" src="assets/ui/cursor_menu.webp" alt="">
       </div>
     </div>
     <!-- The <br> is dropped below the breakpoint in the CSS, where the sentences no
@@ -1194,9 +1206,9 @@
     <div class="set-window" id="set-tabs">
       <div id="set-tabs-row">
         <div class="set-tab active" data-tab="audio"><span class="set-tab-inner"><img
-          class="set-hand" src="assets/ui/cursor_menu.png" alt=""><span class="set-tab-label"></span></span></div>
+          class="set-hand" src="assets/ui/cursor_menu.webp" alt=""><span class="set-tab-label"></span></span></div>
         <div class="set-tab" data-tab="lang"><span class="set-tab-inner"><img
-          class="set-hand" src="assets/ui/cursor_menu.png" alt=""><span class="set-tab-label"></span></span></div>
+          class="set-hand" src="assets/ui/cursor_menu.webp" alt=""><span class="set-tab-label"></span></span></div>
       </div>
     </div>
     <div class="set-window" id="set-body">
@@ -1217,17 +1229,17 @@
 
 <!-- "Something" eye: hidden BS unlock. Hover the bottom-left corner to reveal it; click to unlock the BlackSpace album. -->
 <div id="something-corner" aria-hidden="true">
-  <img id="something-eye" src="assets/ui/Something.png" alt="">
+  <img id="something-eye" src="assets/ui/Something.webp" alt="">
 </div>
 
 <!-- Legend HUD bar (fixed at window top, independent of scene positioning) -->
 <div id="legend-bar">
   <div id="legend-bar-inner">
     <div class="legend-item" id="legend-read">
-      <span class="legend-label">READ:</span> <img class="legend-icon" src="assets/ui/kb_shift.png" alt="SHIFT">
+      <span class="legend-label">READ:</span> <img class="legend-icon" src="assets/ui/kb_shift.webp" alt="SHIFT">
     </div>
     <div class="legend-item" id="legend-view">
-      <span class="legend-label">VIEW:</span> <img class="legend-icon" src="assets/ui/kb_z.png" alt="Z">
+      <span class="legend-label">VIEW:</span> <img class="legend-icon" src="assets/ui/kb_z.webp" alt="Z">
     </div>
   </div>
 </div>
@@ -1249,15 +1261,15 @@
     </div>
 
     <!-- Hand cursor -->
-    <img id="hand-cursor" src="assets/ui/cursor_menu.png" alt="" style="display:none;">
+    <img id="hand-cursor" src="assets/ui/cursor_menu.webp" alt="" style="display:none;">
 
     <!-- Page turn controls (game-accurate) -->
     <div id="page-turn-left" class="page-turn-group">
-      <canvas class="page-key-icon" data-src="assets/ui/kb_arrowleft.png" width="24" height="24" style="position:relative;top:6px;left:-1px"></canvas>
+      <canvas class="page-key-icon" data-src="assets/ui/kb_arrowleft.webp" width="24" height="24" style="position:relative;top:6px;left:-1px"></canvas>
       <canvas class="arrow-icon page-turn-hand" data-frame="2" width="32" height="29" style="position:relative;top:0px;left:-2px"></canvas>
     </div>
     <div id="page-turn-right" class="page-turn-group">
-      <canvas class="page-key-icon" data-src="assets/ui/kb_arrowright.png" width="24" height="24" style="position:relative;top:6px;left:1px"></canvas>
+      <canvas class="page-key-icon" data-src="assets/ui/kb_arrowright.webp" width="24" height="24" style="position:relative;top:6px;left:1px"></canvas>
       <canvas class="arrow-icon page-turn-hand" data-frame="1" width="32" height="29" style="position:relative;top:0px;left:2px"></canvas>
     </div>
 
@@ -1274,7 +1286,7 @@
         <canvas class="arrow-icon" data-frame="1" width="32" height="29"></canvas>
       </div>
       <div id="shift-read-prompt">
-        <img class="legend-icon" src="assets/ui/kb_shift.png" alt="SHIFT">
+        <img class="legend-icon" src="assets/ui/kb_shift.webp" alt="SHIFT">
         <span>READ</span>
       </div>
     </div>
@@ -1286,7 +1298,7 @@
       <div id="message-content">
         <div id="message-text"></div>
       </div>
-      <img id="message-continue" src="assets/ui/cursor_menu.png" alt="">
+      <img id="message-continue" src="assets/ui/cursor_menu.webp" alt="">
     </div>
   </div>
 </div>
@@ -1362,7 +1374,7 @@ function createArrowCanvas(frameIndex, flipX) {
     }
     ctx.drawImage(img, frameIndex * 32, 0, 32, 29, 0, 0, 32, 29);
   };
-  img.src = 'assets/ui/ACSArrows.png';
+  img.src = 'assets/ui/ACSArrows.webp';
   return canvas;
 }
 
@@ -1381,7 +1393,7 @@ function createArrowCanvas(frameIndex, flipX) {
 const I18N = {
   en: {
     title: "BASIL'S PHOTO ALBUM",
-    hint: 'Besides clicking, you can also use Arrow keys / WASD to navigate, <br>Z / Enter / Space to confirm, and X / Esc to cancel, just like the game! <span class="nb">(・∀・)</span>',
+    hint: 'Besides clicking, you can also use Arrow keys / WASD to navigate, <br>Z / Enter / Space to confirm, and X to cancel, just like the game! <span class="nb">(・∀・)</span>',
     warning: "WARNING: Major spoilers ahead. TRUTH ALBUM contains graphic imagery, body horror, and explicit depictions of death — the most disturbing content in OMORI. Proceed only if you're prepared.",
     albums: { dreamworld: 'HEADSPACE', faraway: 'FARAWAY TOWN', blackspace: 'BLACKSPACE' },
     stages: {
@@ -1445,13 +1457,13 @@ let lang = (new URLSearchParams(location.search).get('lang')
 const ALBUMS = {
   dreamworld: {
     name: 'HEADSPACE',
-    bookImage: 'assets/ui/dream_world_album.png',
-    parallax: 'assets/ui/Dreamworld_polaroidBG_FA_day.png',
-    parallaxFg: 'assets/ui/Dreamworld_polaroidBG_FA.png',
-    face: 'assets/ui/basil_face_dw.png',
+    bookImage: 'assets/ui/dream_world_album.webp',
+    parallax: 'assets/ui/Dreamworld_polaroidBG_FA_day.webp',
+    parallaxFg: 'assets/ui/Dreamworld_polaroidBG_FA.webp',
+    face: 'assets/ui/basil_face_dw.webp',
     readOutline: true,
-    selectBg: 'assets/ui/bg_headspace.png',
-    selectGif: 'assets/ui/group_dw.gif',
+    selectBg: 'assets/ui/bg_headspace.webp',
+    selectGif: 'assets/ui/group_dw.webp',
     pageTextPrefix: 'assets/pages/dream_pg',
     thumbPrefix: 'assets/thumbnails/DW_POLAROID_',
     fullPrefix: 'assets/fullsize/DW_A_',
@@ -1472,13 +1484,13 @@ const ALBUMS = {
   },
   faraway: {
     name: 'FARAWAY TOWN',
-    bookImage: 'assets/ui/faraway_town_album.png',
-    parallax: 'assets/ui/Faraway_polaroidBG_FA_day.png',
-    parallaxFg: 'assets/ui/Faraway_polaroidBG_FA.png',
-    face: 'assets/ui/basil_face_fa.png',
+    bookImage: 'assets/ui/faraway_town_album.webp',
+    parallax: 'assets/ui/Faraway_polaroidBG_FA_day.webp',
+    parallaxFg: 'assets/ui/Faraway_polaroidBG_FA.webp',
+    face: 'assets/ui/basil_face_fa.webp',
     readOutline: false,
-    selectBg: 'assets/ui/bg_faraway.png',
-    selectGif: 'assets/ui/group_fa.gif',
+    selectBg: 'assets/ui/bg_faraway.webp',
+    selectGif: 'assets/ui/group_fa.webp',
     pageTextPrefix: 'assets/pages/faraway_pg',
     thumbPrefix: 'assets/thumbnails/FA_POLAROID_',
     fullPrefix: 'assets/fullsize/FA_A_',
@@ -1541,12 +1553,12 @@ const ALBUMS = {
   },
   blackspace: {
     name: 'BLACKSPACE',
-    bookImage: 'assets/ui/blackspace_album.png',
-    parallax: 'assets/ui/Blackspace_polaroidBG_FA_day.png',
-    parallaxFg: 'assets/ui/Blackspace_polaroidBG_FA.png',
+    bookImage: 'assets/ui/blackspace_album.webp',
+    parallax: 'assets/ui/Blackspace_polaroidBG_FA_day.webp',
+    parallaxFg: 'assets/ui/Blackspace_polaroidBG_FA.webp',
     face: null, // no Basil face for BS — no description box uses face yet
     readOutline: true,
-    selectBg: 'assets/ui/Blackspace_polaroidBG_FA_day.png', // red sky (no black overlay = differentiate from inside-album view)
+    selectBg: 'assets/ui/Blackspace_polaroidBG_FA_day.webp', // red sky (no black overlay = differentiate from inside-album view)
     selectGif: null,
     pageTextPrefix: 'assets/pages/blackspace_pg',
     thumbPrefix: 'assets/thumbnails/BS_POLAROID_',
@@ -1761,7 +1773,6 @@ let msgSkipMode = false; // once user skips once, rest of message types instantl
 let msgTypingTimer = null;
 let msgPrevLines = '';   // accumulated previous lines in current box
 let animating = false;
-const bgPreloadCache = {};
 const DEBUG_FRAME = false; // 开启逐帧调试（按 Enter 前进一帧）
 let _debugFrameAdvance = false; // 内部用，逐帧推进信号
 let _debugAnimTickFn = null;    // 内部用，当前调试动画的 tick 函数
@@ -1914,9 +1925,17 @@ function unlockAudio() {
     src.buffer = audioCtx.createBuffer(1, 1, 22050);
     src.connect(audioCtx.destination);
     src.start(0);
-    audioUnlocked = true;
-  } catch (e) { /* retry on the next gesture */ }
-  audioCtx.resume();
+  } catch (e) { return; }   // nothing latched; the next gesture tries again
+  // Latch only once the context is genuinely running. A call that didn't come from a
+  // real gesture — from the devtools console, say — is refused by the autoplay policy
+  // and logged as a warning; marking it unlocked there would mean never trying again
+  // when a real gesture does arrive.
+  audioCtx.resume().then(() => {
+    if (audioCtx.state === 'running') audioUnlocked = true;
+  }).catch(() => {});
+  // Warm the cues a first click can produce. The BLACKSPACE sting is left out: it is
+  // the largest of them and only ever plays at the end of one album.
+  ['cursor', 'select', 'cancel', 'pageTurn', 'buzzer'].forEach(ensureSfx);
 }
 ['pointerdown', 'keydown', 'touchstart'].forEach(evt =>
   window.addEventListener(evt, unlockAudio, { capture: true, passive: true }));
@@ -1949,7 +1968,9 @@ function loadSfx(name, base) {
 const ME_SFX = new Set(['jumpscare']);
 
 function playSfxBuffer(name, volume = 0.9) {
-  if (!musicEnabled || !sfxBuffers[name]) return;
+  if (!musicEnabled) return;
+  ensureSfx(name);            // first call only kicks off the fetch; nothing plays yet
+  if (!sfxBuffers[name]) return;
   if (audioCtx.state === 'suspended') audioCtx.resume();
   const source = audioCtx.createBufferSource();
   source.buffer = sfxBuffers[name];
@@ -1959,12 +1980,21 @@ function playSfxBuffer(name, volume = 0.9) {
   gain.connect(audioCtx.destination);
   source.start(0);
 }
-loadSfx('pageTurn',  'SE_turn_page');
-loadSfx('cursor',    'sys_cursor1');
-loadSfx('select',    'SYS_select');
-loadSfx('cancel',    'sys_cancel');
-loadSfx('buzzer',    'sys_buzzer');
-loadSfx('jumpscare', 'SE_something_disappears');
+// Fetched on first use, not at startup. None of these can be heard before the reader
+// turns music on, but eagerly loading them put ~200KB on the critical path — a third
+// of it the BLACKSPACE sting, which most visitors will never reach. unlockAudio()
+// warms the small ones on the first gesture so the very first click still clicks.
+const SFX_FILES = {
+  pageTurn: 'SE_turn_page', cursor: 'sys_cursor1', select: 'SYS_select',
+  cancel: 'sys_cancel', buzzer: 'sys_buzzer', jumpscare: 'SE_something_disappears',
+};
+const sfxRequested = new Set();
+
+function ensureSfx(name) {
+  if (sfxRequested.has(name) || !SFX_FILES[name]) return;
+  sfxRequested.add(name);
+  loadSfx(name, SFX_FILES[name]);
+}
 const playPageTurnSfx = () => playSfxBuffer('pageTurn');
 const playCursorSfx   = () => playSfxBuffer('cursor');
 const playSelectSfx   = () => playSfxBuffer('select');
@@ -2069,32 +2099,23 @@ window.addEventListener('DOMContentLoaded', () => {
   if (document.fonts && document.fonts.load) {
     document.fonts.load('28px OMORI_TITLE').catch(() => {});
   }
-  // Preload all background images (with promises for waiting)
-  ['assets/ui/Faraway_polaroidBG_FA_day.png',
-   'assets/ui/Dreamworld_polaroidBG_FA_day.png',
-   'assets/ui/Faraway_polaroidBG_FA.png',
-   'assets/ui/Dreamworld_polaroidBG_FA.png'
-  ].forEach(src => {
-    const img = new Image();
-    bgPreloadCache[src] = new Promise(r => {
-      img.onload = r; img.onerror = r;
-      img.src = src;
-      if (img.complete) r();
-    });
-  });
   startLoop();
-  $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.png')`;
 
-  // 开场就把所有相册的缩略图（很小，约 1.5MB）拉进浏览器缓存，翻页时不再有小卡顿。
-  preloadAllThumbnails();
+  // Deliberately NOT started here. 116 requests issued at DOMContentLoaded compete
+  // with the handful of images the select screen needs to draw itself, so on a slow
+  // link the reader stares at an empty screen while the browser fetches thumbnails
+  // for albums they haven't opened. It runs after `load` instead — see below.
 
   // Fade in from black once page is ready
   window.addEventListener('load', () => {
     setTimeout(() => {
       document.getElementById('scene-transition').classList.remove('active');
     }, 200);
-    // 大图体量大（约 31MB），不塞进开场黑屏里等；等页面 load 完、浏览器空闲时再一张张
-    // 低优先级预取，让查看模式翻大图也基本命中缓存，又不跟首屏资源抢带宽。
+    // Both prefetches wait for `load`, so the select screen's own images get the
+    // connection to themselves first. Thumbnails (1.5MB) go first because they are
+    // what the next click needs; the fullsize photos (31MB) follow, and only on a
+    // connection measured fast enough to carry them.
+    preloadAllThumbnails();
     preloadAllFullsizeIdle();
   });
 });
@@ -2115,7 +2136,7 @@ function collectAllPhotoUrls(kind) {
           if (!num) continue;
           const nn = String(num).padStart(2, '0');
           // 大图 URL 必须带上 ?v=2，跟 fullUrl() 完全一致，否则缓存 key 不同、等于白预加载。
-          urls.add(kind === 'thumb' ? `${prefix}${nn}${suffix}.png` : `${prefix}${nn}${suffix}.png?v=2`);
+          urls.add(kind === 'thumb' ? `${prefix}${nn}${suffix}.webp` : `${prefix}${nn}${suffix}.webp?v=2`);
         }
       }
     }
@@ -2213,8 +2234,8 @@ function drawArrowIcons() {
     // page-turn hands back to the red/white state that page actually calls for.
     if (album) updatePageTurnHands();
   }
-  loadAtlas('assets/ui/ACSArrows.png', (img) => { arrowImgRed = img; onLoad(); });
-  loadAtlas('assets/ui/ACSArrows_white.png', (img) => { arrowImgWhite = img; onLoad(); });
+  loadAtlas('assets/ui/ACSArrows.webp', (img) => { arrowImgRed = img; onLoad(); });
+  loadAtlas('assets/ui/ACSArrows_white.webp', (img) => { arrowImgWhite = img; onLoad(); });
 }
 
 // Redraw a page-turn hand as red (active) or white (disabled)
@@ -2270,9 +2291,9 @@ function drawKeyIcons() {
 }
 
 function drawCovers() {
-  loadAtlas('assets/ui/PhotoAlbumCovers.png', (img) => {
+  loadAtlas('assets/ui/PhotoAlbumCovers.webp', (img) => {
     const cw = 241, ch = 325;
-    // Atlas order in PhotoAlbumCovers.png: 0=Faraway, 1=Dreamworld, 2=BlackSpace
+    // Atlas order in PhotoAlbumCovers.webp: 0=Faraway, 1=Dreamworld, 2=BlackSpace
     const frames = {'cover-fa': 0, 'cover-dw': 1, 'cover-bs': 2};
     Object.keys(frames).forEach((id) => {
       const c = document.getElementById(id);
@@ -2716,7 +2737,7 @@ function renderSettings() {
   // deselecting it, which greys the hand and freezes it (see .set-hand.idle). So the
   // selected row always carries a hand; only its state changes with focus.
   const handFor = (on) => `<img class="set-hand${on && setFocus === 'items' ? '' : ' idle'}"
-      src="assets/ui/cursor_menu.png" alt=""${on ? '' : ' hidden'}>`;
+      src="assets/ui/cursor_menu.webp" alt=""${on ? '' : ' hidden'}>`;
 
   if (setTab === 'audio') {
     // SET_ROW_TOP shifts the whole column down so the first label isn't flush against
@@ -2742,7 +2763,7 @@ function renderSettings() {
     const opt = (code, label, x) => `
       <span class="set-opt-box" style="left:${x}px">
         ${code === handOn
-          ? `<img class="set-hand${setFocus === 'items' ? '' : ' idle'}" src="assets/ui/cursor_menu.png" alt="">`
+          ? `<img class="set-hand${setFocus === 'items' ? '' : ' idle'}" src="assets/ui/cursor_menu.webp" alt="">`
           : ''}
         <span class="set-opt" data-lang="${code}">${label}</span>
       </span>`;
@@ -3146,6 +3167,13 @@ function updateSelectCursor() {
       const fadeDone = new Promise(r => setTimeout(r, 250));
 
       Promise.all([gifReady, bgReady, fadeDone]).then(() => {
+        // The reader may have opened an album while these were still downloading —
+        // openAlbum() hides the select backdrop, and this callback would put it back
+        // up, over the album. Bail instead; currentSelectBg is left untouched, so the
+        // swap runs properly the next time the select screen is on screen. Only ever
+        // seen on a throttled connection, where the images take longer than the 250ms
+        // fade they were meant to hide behind.
+        if (!document.body.classList.contains('on-select')) return;
         // Everything loaded AND fade is fully black: swap under cover.
         // Toggle the BS-tile class here too so the bg-size mode change is hidden by the fade.
         $sbg.style.backgroundImage = `url('${newBg}')`;
@@ -3170,10 +3198,10 @@ function updateSelectCursor() {
 // ═══════════════════════════════════════════════════
 // Photo filename helpers (respect thumbSuffix/fullSuffix overrides)
 function thumbUrl(albumObj, num) {
-  return `${albumObj.thumbPrefix}${String(num).padStart(2,'0')}${albumObj.thumbSuffix || ''}.png`;
+  return `${albumObj.thumbPrefix}${String(num).padStart(2,'0')}${albumObj.thumbSuffix || ''}.webp`;
 }
 function fullUrl(albumObj, num) {
-  return `${albumObj.fullPrefix}${String(num).padStart(2,'0')}${albumObj.fullSuffix || ''}.png?v=2`;
+  return `${albumObj.fullPrefix}${String(num).padStart(2,'0')}${albumObj.fullSuffix || ''}.webp?v=2`;
 }
 
 // Given a global slot index (0 to maxPages*6 - 1), return actual photo number at that slot (0 = empty)
@@ -3351,8 +3379,8 @@ function renderPage() {
       && page === 1
       && dwClearRevealed;
   $pageOverlay.src = dwClearPageSwap
-      ? `${album.pageTextPrefix}3.png`
-      : `${album.pageTextPrefix}${page + 1}.png`;
+      ? `${album.pageTextPrefix}3.webp`
+      : `${album.pageTextPrefix}${page + 1}.webp`;
 
   const photos = album.pages[page] || [];
   photos.forEach((num, i) => {
@@ -3400,7 +3428,7 @@ function renderPage() {
 // the reveal fires (user navigated away in zoom mode and exits to a different
 // page), skip the animation — renderPage will pick up pg3 from the flag.
 function crossfadeDWPageText() {
-  const pg3Src = `${ALBUMS.dreamworld.pageTextPrefix}3.png`;
+  const pg3Src = `${ALBUMS.dreamworld.pageTextPrefix}3.webp`;
   // Only play the crossfade if the user was already on page 2 in browse mode
   // before entering zoom — that's when they actually had pg2 on screen and the
   // dissolve makes narrative sense. Otherwise renderPage will hard-swap to pg3.
@@ -4073,7 +4101,7 @@ function flipPhoto() {
   photoFlipping = true;
   const PHASE_MS = 500; // ~30 frames at 60fps (3× slower than plugin default for cutscene feel)
   const goingToBack = !photoFlipped;
-  const backUrl = 'assets/fullsize/FA_A_37_back.png';
+  const backUrl = 'assets/fullsize/FA_A_37_back.webp';
   const frontUrl = fullUrl(album, 37);
   // Hiding the back-side photo's text means SHIFT READ disappears too —
   // start fading it the moment we begin flipping (or fade back in once it's safe).
@@ -4537,7 +4565,7 @@ function snapToSelectScreen() {
   document.getElementById('select-gif').style.display = '';
   currentSelectBg = '';
   updateSelectCursor();
-  $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.png')`;
+  $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.webp')`;
   $parallax.style.backgroundPosition = '0 0';
 
   // The jumpscare can fire from viewing (zoom) mode, skipping the normal endViewing
@@ -4602,7 +4630,7 @@ function goBackToSelect() {
     document.getElementById('select-gif').style.display = '';
     currentSelectBg = ''; // Reset so it re-applies
     updateSelectCursor();
-    $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.png')`;
+    $parallax.style.backgroundImage = `url('assets/ui/Faraway_polaroidBG_FA_day.webp')`;
     $parallax.style.backgroundPosition = '0 0';
     // Don't clear parallax-fg — keep it loaded/cached to avoid repaint delay next time
     // Wipe any inline transform/opacity/transition left behind on the book +
