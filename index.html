@@ -2822,7 +2822,8 @@ function settingsKey(e) {
   const up = k === 'ArrowUp' || k === 'w' || k === 'W';
   const down = k === 'ArrowDown' || k === 's' || k === 'S';
   const ok = k === 'z' || k === 'Z' || k === 'Enter' || k === ' ';
-  const cancel = k === 'x' || k === 'X' || k === 'Escape';
+  // See the note on Escape by FAST_KEYS.
+  const cancel = k === 'x' || k === 'X';
   const TABS = ['audio', 'lang'];
 
   if (cancel) {
@@ -4666,7 +4667,11 @@ function exitBsOnlyMode() {
 // Hold-to-fast-forward (game's _showFast). Fire ONLY on browser autorepeat
 // (e.repeat=true) so a quick tap to advance doesn't accidentally fast-forward
 // the next line.
-const FAST_KEYS = new Set([' ', 'Enter', 'z', 'Z', 'x', 'X', 'Shift', 'Escape']);
+// Escape is deliberately not a cancel key. The browser exits fullscreen on it before
+// the page ever sees it, so binding it there meant one press did two things at once —
+// left fullscreen *and* backed out a level — with nothing on screen to explain why.
+// X is the game's own cancel key and no browser touches it.
+const FAST_KEYS = new Set([' ', 'Enter', 'z', 'Z', 'x', 'X', 'Shift']);
 document.addEventListener('keydown', (e) => {
   if (FAST_KEYS.has(e.key) && e.repeat && performance.now() >= msgHoldFastUnlockAt) {
     msgHoldFast = true;
@@ -4736,7 +4741,7 @@ document.addEventListener('keydown', (e) => {
 
   // ── VIEWING ──
   if (state === 'viewing') {
-    if (key === 'Escape' || key === 'x' || key === 'X') {
+    if (key === 'x' || key === 'X') {
       endViewing();
     } else if (key === 'a' || key === 'A' || key === 'ArrowLeft') {
       slideViewingPhoto(-1);
@@ -4801,7 +4806,7 @@ document.addEventListener('keydown', (e) => {
     } else if (key === 'Shift') {
       const bnum = photoNumAtIdx(page * 6 + cursorIdx);
       if (bnum && photoHasText(bnum - 1)) showMessage(album.texts[bnum - 1]);
-    } else if (key === 'Escape' || key === 'x' || key === 'X') {
+    } else if (key === 'x' || key === 'X') {
       goBackToSelect();
     }
     return;
