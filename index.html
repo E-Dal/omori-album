@@ -2079,6 +2079,19 @@ const $viewer = document.getElementById('viewer');
 const $viewerPhoto = document.getElementById('viewer-photo');
 const $viewerArrowL = document.getElementById('viewer-arrow-left');
 const $viewerArrowR = document.getElementById('viewer-arrow-right');
+// Album page flip, in frames at 60fps: the page collapses to nothing, swaps, and grows
+// back. The game uses 20 and 15 (photo_album_plugin.js turnPageRight :2308 and :2318,
+// stepped once per frame with input locked throughout — 617ms end to end), and these were
+// briefly set to match. They are deliberately shorter.
+//
+// The two numbers measure different things. easeOutCirc is front-loaded: the first frame
+// alone collapses the page to 68.8%, and by frame 15 of 20 it is at 3.2% — the remaining
+// five frames crawl from 3% to 0 and cannot be seen. Of the game's 617ms, about 150ms is
+// that invisible tail, so what a player actually perceives is nearer 467ms. 12+8 gives a
+// perceived 283ms, which is what matching the real game by eye landed on.
+const PAGE_FLIP_F1 = 12;
+const PAGE_FLIP_F2 = 8;
+
 const $shiftRead = document.getElementById('shift-read-prompt');
 // The shown end of the show/hide tween, which is written inline from JS and so wins over
 // any stylesheet rule — which is why it's a constant here rather than CSS. It's the whole
@@ -3670,9 +3683,8 @@ function turnPage(dir) {
     const newSide = dir > 0 ? 0 : 1;
 
     let frame = 0;
-    // Snappier than game's 20+15: 12+8 (0.33s total) for crisper turn feel
-    const phase1Frames = 12;
-    const phase2Frames = 8;
+    const phase1Frames = PAGE_FLIP_F1;
+    const phase2Frames = PAGE_FLIP_F2;
     // easeOutCirc formula from Omori BASE.js L5475
     const easeOutCirc = t => Math.sqrt(1 - (t - 1) * (t - 1));
 
@@ -3734,11 +3746,13 @@ function startViewing() {
   $viewer.classList.add('active');
 
   // ── Set initial state (no transition yet) ──
-  const isFaraway = (album === ALBUMS.faraway);
   $viewerPhoto.style.transition = 'none';
   // Game: photo starts with top edge at scene bottom (y=480), i.e. 240px below top:50% anchor
   $viewerPhoto.style.transform = 'translate(-50%, 240px)';
-  $viewerPhoto.style.opacity = isFaraway ? '0' : '1';
+  // Every album, not just FARAWAY: endViewingPicture tweens the photo's opacity to 0 on the
+  // way out, so startViewingPicture's tween always begins at 0 and carries opacity alongside
+  // x and y in the same 25 frames.
+  $viewerPhoto.style.opacity = '0';
 
   // Album slides out — game: duration 15 frames (0.25s), easeInCirc
   $book.style.transition = 'transform 0.25s var(--ease-in-circ), opacity 0.25s var(--ease-in-circ)';
@@ -3775,6 +3789,19 @@ function startViewing() {
   // BS hides the visual prompt but keeps the click area active (album.hideReadPrompt).
   // DW #13 (POST-RESET/CONSOLE) does the same per-photo until revealed.
   const readHiddenStart = album.hideReadPrompt || isDWClearReadHidden(num);
+  // Game: 25 frames, easeInCirc, from opacity 0 (photo_album_plugin.js — the sprite is
+  // created at opacity 0 and tweened to 255 on entering viewing mode). Because easeInCirc
+  // is slow at the start, the prompt only crosses half opacity around frame 22 (~370ms),
+  // which is why it reads as arriving a beat after the photo rather than with it.
+  // The start value and the forced style read are both load-bearing: #viewer was
+  // display:none until a few lines ago, so without them the browser has nothing to
+  // transition from and jumps straight to the end. The transition is re-stated here
+  // rather than left to CSS because the hide path writes its own inline value and
+  // nothing ever cleared it.
+  $shiftRead.style.transition = 'none';
+  $shiftRead.style.opacity = '0';
+  void $shiftRead.offsetHeight;
+  $shiftRead.style.transition = 'opacity 0.42s var(--ease-in-circ)';
   $shiftRead.style.opacity = (hasTextStart && !readHiddenStart) ? SHIFT_PROMPT_OPACITY : '0';
   $shiftRead.style.pointerEvents = hasTextStart ? '' : 'none';
   $shiftRead.classList.toggle('has-outline', album.readOutline);
@@ -3790,10 +3817,8 @@ function startViewing() {
   // Force layout flush so initial state is applied, then set targets with transition
   $viewerPhoto.offsetHeight;
 
-  // Game: photo y+opacity tween 25 frames (0.42s), easeOutCirc
-  $viewerPhoto.style.transition = isFaraway
-    ? 'transform 0.42s var(--ease-out-circ), opacity 0.42s var(--ease-out-circ)'
-    : 'transform 0.42s var(--ease-out-circ)';
+  // Game: photo x+y+opacity tween together, 25 frames (0.42s), easeOutCirc
+  $viewerPhoto.style.transition = 'transform 0.42s var(--ease-out-circ), opacity 0.42s var(--ease-out-circ)';
   $viewerPhoto.style.transform = 'translate(-50%, -50%)';
   $viewerPhoto.style.opacity = '1';
 
@@ -4094,25 +4119,49 @@ function slideViewingPhoto(dir) {
     oldImg.style.opacity = '0';
 
     // Set up slide-in position first, then change src (already decoded → paints immediately)
+    // The offset is 320px, not a percentage of the photo: the game parks the incoming
+    // sprite's centre at Graphics.width + width/2, and with left:50% + translate(-50%)
+    // cancelling out, that works out to exactly half a 640px stage regardless of how wide
+    // the photo is. The old 80% assumed a 400px-wide photo; ours are 361, which left a
+    // 31px sliver of the new photo showing at the right edge before the slide began.
+    // Mirrored for the other direction — the game parks the prev-direction sprite a whole
+    // extra screen further out (-(Graphics.width + width/2), plugin :1405), so left turns
+    // cover more than twice the distance in the same 25 frames. That reads as an oversight
+    // rather than intent, so this stays symmetric.
     $viewerPhoto.style.transition = 'none';
-    $viewerPhoto.style.transform = dir > 0 ? 'translate(80%, -50%)' : 'translate(-180%, -50%)';
-    $viewerPhoto.style.opacity = '1';
+    $viewerPhoto.style.transform = dir > 0
+      ? 'translate(320px, -50%)'
+      : 'translate(calc(-100% - 320px), -50%)';
+    // Game: the slide sprite is reset to opacity 0 after every slide (onPictureShowFinish),
+    // so the incoming photo fades up through the same tween that moves it.
+    $viewerPhoto.style.opacity = '0';
     $viewerPhoto.style.zIndex = '37';
     $viewerPhoto.src = newSrc;
 
-    // Game: new photo slides in 25 frames (0.42s) easeOutCirc
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        $viewerPhoto.style.transition = 'transform 0.42s cubic-bezier(0, 0.55, 0.45, 1)';
-        $viewerPhoto.style.transform = 'translate(-50%, -50%)';
-      });
-    });
+    // Game: new photo slides in 25 frames (0.42s) easeOutCirc.
+    // A forced style read rather than two nested rAFs. The pair was there to be sure the
+    // new src had painted before the slide began, but the bitmap is pre-decoded above, so
+    // all that's needed is for the start transform and opacity to resolve — and the pair
+    // cost two frames, which the eye reads as part of the animation.
+    void $viewerPhoto.offsetHeight;
+    $viewerPhoto.style.transition = 'transform 0.42s cubic-bezier(0, 0.55, 0.45, 1), opacity 0.42s cubic-bezier(0, 0.55, 0.45, 1)';
+    $viewerPhoto.style.transform = 'translate(-50%, -50%)';
+    $viewerPhoto.style.opacity = '1';
 
+    // Game: showNext/showPrevViewingPicture give the arrows their own 15-frame tween
+    // (0.25s), shorter than the 25 they get entering and matching the 15 they get leaving.
+    // Without this they'd use the stylesheet's 0.42s, which startViewing restores.
+    $viewerArrowL.style.transition = 'transform 0.25s var(--ease-out-circ), opacity 0.25s var(--ease-out-circ)';
+    $viewerArrowR.style.transition = $viewerArrowL.style.transition;
     updateViewerArrows();
     const hasTextNew = photoHasText(num - 1);
     const readHiddenNew = album.hideReadPrompt || isDWClearReadHidden(num);
     const newShiftOpacity = (hasTextNew && !readHiddenNew) ? SHIFT_PROMPT_OPACITY : '0';
     if ($shiftRead.style.opacity !== newShiftOpacity) {
+      // Game: updateShiftToRead tweens 25 frames to show and 10 to hide, both easeInCirc.
+      $shiftRead.style.transition = newShiftOpacity === '0'
+        ? 'opacity 0.17s var(--ease-in-circ)'
+        : 'opacity 0.42s var(--ease-in-circ)';
       $shiftRead.style.opacity = newShiftOpacity;
     }
     $shiftRead.style.pointerEvents = hasTextNew ? '' : 'none';
