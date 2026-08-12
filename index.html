@@ -108,6 +108,21 @@
   /* keep-all stops CJK breaking between characters, so a Chinese run became one
      unbreakable word: it could not fit after "OMORI " and wrapped whole, leaving a
      near-empty first line. Chinese is supposed to break between characters. */
+  /* English only: nudge the date up a pixel inside its box. Taking it off the top
+     padding and giving it back to the bottom keeps the box exactly the same height —
+     it is anchored by `bottom`, so height is what decides where the top edge sits. */
+  html[lang^="en"] #message-date { padding: 0 8px 5px 8px; }
+
+  /* Viewing mode's read prompt, Chinese only: the two characters run small against
+     the English word at the same size, so +2px. Scoped to this prompt — the legend
+     bar's 阅读 is a different element and stays as it is. */
+  html[lang^="zh"] #shift-read-prompt span { font-size: 30px; }
+  /* …and lift the whole prompt back onto the line English puts it on. The prompt is
+     bottom-anchored with align-items: center, so its height — which comes from the
+     span's line box, and so from the font — decides where the SHIFT icon lands. The
+     two faces gave it different heights and the icon sat 4px lower in Chinese. */
+  html[lang^="zh"] #shift-read-prompt { bottom: 9px; }
+
   html[lang^="zh"] #message-box {
     word-break: normal;
     /* One hanzi (17.92px at this size) more room on the right. Our text area was
@@ -115,7 +130,7 @@
        "掌握了制作方 / 法" instead of the game's "掌握了制作 / 方法". Padding rather
        than a font-size nudge: the glyph size is already what it should be, it is the
        measure that was a character too generous. */
-    padding-right: 32px;
+    padding-right: 28px;
   }
   .text-distort { font-family: 'OMORI_TITLE', 'EXTRAS', 'XIAOLAI', sans-serif; }
   /* The distort face has no CJK either, so it needs the same fallback. */
@@ -996,18 +1011,32 @@
   }
   #shift-read-prompt .legend-icon { height: 24px; position: relative; top: 6px; left: -3px; }
   #shift-read-prompt span {
-    color: #fff; font-size: 28px; letter-spacing: 1px;
+    /* Negative tracking: where the stroke below is on, READ's letters sit far enough
+       apart that it bridges some pairs and not others; 1px closer and the outline reads
+       as one deliberate band. Applied to every language and album rather than scoped to
+       the stroked ones, so the prompt is the same width wherever it appears. */
+    color: #fff; font-size: 28px; letter-spacing: -1px;
     margin-left: -8px;
     position: relative;
     top: 3px;
   }
   #shift-read-prompt.has-outline span {
-    /* Subtle dark outline — per-layer 0.15 (8 direction stack lands around 0.3-0.4) */
-    text-shadow:
-      -1px -1px 0 rgba(0,0,0,0.15), 1px -1px 0 rgba(0,0,0,0.15),
-      -1px  1px 0 rgba(0,0,0,0.15), 1px  1px 0 rgba(0,0,0,0.15),
-      -1px  0   0 rgba(0,0,0,0.15), 1px  0   0 rgba(0,0,0,0.15),
-       0  -1px 0 rgba(0,0,0,0.15), 0    1px 0 rgba(0,0,0,0.15);
+    /* Three layers on the albums whose readOutline flag is set.
+       The outline is a real stroke, not a ring of offset shadow copies. Copies overlap
+       each other at the corners, and semi-transparent ones compound where they overlap,
+       so the ring came out visibly lumpier on one side of a glyph than the other. A
+       stroke is laid down once: same weight the whole way round, and honestly
+       semi-transparent — the background shows through it. paint-order puts it behind the
+       glyph so the 3px only grows outward.
+       Then two shadows. The wide faint one is the glow; the tighter, darker one feathers
+       the stroke's outer edge. Both need a *large* blur and *zero* offset, which is why
+       neither can be folded into the stroke — and why the feather's blur has to exceed
+       the stroke width before any of it escapes past the edge. Below about 6px nothing
+       shows at all. */
+    text-shadow: 0 0 7px rgba(120,120,120,0.25),
+                 0 0 9px rgba(64,64,64,0.6);
+    paint-order: stroke fill;
+    -webkit-text-stroke: 3px rgba(64,64,64,0.5);
   }
 
   /* ── Message box (for reading descriptions) ── */
@@ -1022,7 +1051,7 @@
     padding-right: 14px;
     padding-bottom: 11px;
     padding-left: 14px;
-    font-size: 30px;
+    font-size: 28px;
     word-break: keep-all;
     overflow-wrap: normal;
     line-height: 29px;
@@ -1054,8 +1083,10 @@
     border: 3px solid #fff;
     outline: 1px solid #000;
     color: #fff;
-    padding: 0 8px 4px 8px;
-    font-size: 30px;
+    /* padding-top 1px, not 0: the box is anchored by `bottom`, so the extra pixel
+       grows the top edge upward while the text stays exactly where it was. */
+    padding: 1px 8px 4px 8px;
+    font-size: 28px;
     line-height: 30px;
     white-space: nowrap;
     display: none;
@@ -2047,6 +2078,10 @@ const $viewerPhoto = document.getElementById('viewer-photo');
 const $viewerArrowL = document.getElementById('viewer-arrow-left');
 const $viewerArrowR = document.getElementById('viewer-arrow-right');
 const $shiftRead = document.getElementById('shift-read-prompt');
+// The prompt sits under the photo and shouldn't compete with it. A constant rather
+// than CSS because its opacity is animated from JS — the show/hide tween writes an
+// inline value, which would win over any stylesheet rule.
+const SHIFT_PROMPT_OPACITY = '0.8';
 const $msgBox = document.getElementById('message-box');
 const $msgText = document.getElementById('message-text');
 const $parallax = document.getElementById('parallax-bg');
@@ -3737,7 +3772,7 @@ function startViewing() {
   // BS hides the visual prompt but keeps the click area active (album.hideReadPrompt).
   // DW #13 (POST-RESET/CONSOLE) does the same per-photo until revealed.
   const readHiddenStart = album.hideReadPrompt || isDWClearReadHidden(num);
-  $shiftRead.style.opacity = (hasTextStart && !readHiddenStart) ? '1' : '0';
+  $shiftRead.style.opacity = (hasTextStart && !readHiddenStart) ? SHIFT_PROMPT_OPACITY : '0';
   $shiftRead.style.pointerEvents = hasTextStart ? '' : 'none';
   $shiftRead.classList.toggle('has-outline', album.readOutline);
   updateBsDwellTimer();
@@ -4073,7 +4108,7 @@ function slideViewingPhoto(dir) {
     updateViewerArrows();
     const hasTextNew = photoHasText(num - 1);
     const readHiddenNew = album.hideReadPrompt || isDWClearReadHidden(num);
-    const newShiftOpacity = (hasTextNew && !readHiddenNew) ? '1' : '0';
+    const newShiftOpacity = (hasTextNew && !readHiddenNew) ? SHIFT_PROMPT_OPACITY : '0';
     if ($shiftRead.style.opacity !== newShiftOpacity) {
       $shiftRead.style.opacity = newShiftOpacity;
     }
@@ -4112,7 +4147,7 @@ function flipPhoto() {
   // Hiding the back-side photo's text means SHIFT READ disappears too —
   // start fading it the moment we begin flipping (or fade back in once it's safe).
   $shiftRead.style.transition = `opacity ${PHASE_MS}ms linear`;
-  $shiftRead.style.opacity = goingToBack ? '0' : '1';
+  $shiftRead.style.opacity = goingToBack ? '0' : SHIFT_PROMPT_OPACITY;
   $shiftRead.style.pointerEvents = goingToBack ? 'none' : '';
   // Game-accurate stepped easing: 10 discrete scale.x values per phase
   // (matches plugin's per-frame 0.1 increment — visibly steppy, not smooth).
