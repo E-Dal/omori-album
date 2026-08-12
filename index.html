@@ -201,8 +201,9 @@
        downward instead of riding up into the selected album's hand cursor. 195px is
        where the old centre-anchored 2-line box started, so desktop is unchanged. */
     transform: translate(-50%, 195px);
-    /* The 650px floor is >= the 633px longest line at 24px (and >= the 591px the h1
-       reaches at maximum boost), so the --boost
+    /* The 720px floor is >= the 707px longest line (and >= the 591px the h1 reaches at
+       maximum boost). Re-derive both this and the breakpoint below whenever the hint's
+       wording changes — they are measurements of this exact sentence, not round numbers, so the --boost
        counter-scale rewraps the text rather than widening the box past what the fit
        measurement assumes. Above that floor the box stretches to fill the window:
        --boost converts window px into stage px, so the box always renders
@@ -219,7 +220,7 @@
        keeps box and text in lockstep, so the line count is scale-independent and the
        fit converges in one step instead of oscillating. */
     margin: 0;
-    width: max(650px, calc((100vw - 16px) * var(--boost)));
+    width: max(720px, calc((100vw - 16px) * var(--boost)));
   }
   .content-warning {
     position: absolute;
@@ -397,7 +398,7 @@
      than this the break stays and the hint renders exactly as it always has. This is
      the one deliberate breakpoint on the select screen; it only shifts a couple of
      words, unlike a font-size step, and it sits where the wrapping changes anyway. */
-  @media (max-width: 680px) {
+  @media (max-width: 754px) {
     .select-hint br { display: none; }
 
     /* Phone rebalance. The hint counter-scales by --boost so it renders at a constant
@@ -1406,7 +1407,7 @@ const I18N = {
   },
   zh: {
     title: 'BASIL 的相册',
-    hint: '除了点击，你也可以用方向键 / WASD 移动，<br>Z / Enter / Space 确认，还有 X / Esc 取消，就像游戏里一样！<span class="nb">(・∀・)</span>',
+    hint: '除了点击，你也可以用方向键 / WASD 移动，<br>Z / Enter / Space 确认，还有 X 取消，就像游戏里一样！<span class="nb">(・∀・)</span>',
     warning: '警告：前方严重剧透。TRUTH ALBUM 含有令人不安的黑白画面、身体恐怖、以及对死亡的直接呈现，是 OMORI 中最令人不适的内容。请做好准备再继续。',
     albums: { dreamworld: '脑内世界', faraway: '遥远小镇', blackspace: '黑色空间' },
     stages: {
@@ -2474,7 +2475,7 @@ const SELECT_ROWS = '#album-select h1, .album-covers, .select-hint, .content-war
 // measuring either would feed back into the very scale it depends on. Their fixed
 // box widths are used instead.
 const MEASURED_ROWS = '#album-select h1, .album-covers';
-const HINT_BOX_W = 650; // keep in sync with the floor in .select-hint's width
+const HINT_BOX_W = 720; // keep in sync with the floor in .select-hint's width
 const WARN_BOX_W = 800; // keep in sync with the cap in .content-warning's max-width
 function selectContentWidth() {
   let w = 0;
