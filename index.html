@@ -1009,34 +1009,36 @@
     transition: opacity 0.42s var(--ease-in-circ);
     cursor: pointer;
   }
-  #shift-read-prompt .legend-icon { height: 24px; position: relative; top: 6px; left: -3px; }
+  /* Icon and text carry their own opacity rather than sharing the parent's: the parent's
+     is the show/hide tween (JS writes it inline), so anything put there dims both halves
+     together. Nested opacity multiplies, so each stays at its own value times whatever
+     the tween is at — the two are independent. */
+  #shift-read-prompt .legend-icon { height: 24px; position: relative; top: 6px; left: -3px; opacity: 0.9; }
   #shift-read-prompt span {
-    /* Negative tracking: where the stroke below is on, READ's letters sit far enough
-       apart that it bridges some pairs and not others; 1px closer and the outline reads
-       as one deliberate band. Applied to every language and album rather than scoped to
-       the stroked ones, so the prompt is the same width wherever it appears. */
-    color: #fff; font-size: 28px; letter-spacing: -1px;
+    /* ← 只调 READ 的透明度，改这一行；SHIFT 图标的在上一行 */
+    opacity: 0.9;
+    /* No letter-spacing: the stroke below is what decides how the word holds together,
+       and at 3px it bridges READ's letters on its own. The 1px this used to carry pushed
+       them back apart again. */
+    color: #fff; font-size: 28px;
     margin-left: -8px;
     position: relative;
     top: 3px;
   }
   #shift-read-prompt.has-outline span {
-    /* Three layers on the albums whose readOutline flag is set.
-       The outline is a real stroke, not a ring of offset shadow copies. Copies overlap
-       each other at the corners, and semi-transparent ones compound where they overlap,
-       so the ring came out visibly lumpier on one side of a glyph than the other. A
-       stroke is laid down once: same weight the whole way round, and honestly
-       semi-transparent — the background shows through it. paint-order puts it behind the
-       glyph so the 3px only grows outward.
-       Then two shadows. The wide faint one is the glow; the tighter, darker one feathers
-       the stroke's outer edge. Both need a *large* blur and *zero* offset, which is why
-       neither can be folded into the stroke — and why the feather's blur has to exceed
-       the stroke width before any of it escapes past the edge. Below about 6px nothing
-       shows at all. */
-    text-shadow: 0 0 7px rgba(120,120,120,0.25),
-                 0 0 9px rgba(64,64,64,0.6);
+    /* A stroke and nothing else, on the albums whose readOutline flag is set.
+       Not a ring of offset shadow copies: copies overlap at the corners and, being
+       semi-transparent, compound where they overlap, so one side of a glyph came out
+       visibly heavier than the other. A stroke is laid down once — the same weight the
+       whole way round, and honestly semi-transparent, with the photo showing through it.
+       paint-order puts it behind the glyph so the 3px only grows outward.
+       Deliberately no blurred layer. A glow and a feathered edge were both tried and both
+       removed: at the size this actually renders — 3px of blur radius against 30px text,
+       on a screen, at 1:1 — blur is a haze over the whole word rather than a soft edge.
+       It only looked right on magnified screenshots. Softness here has to come from the
+       stroke's own alpha. */
     paint-order: stroke fill;
-    -webkit-text-stroke: 3px rgba(64,64,64,0.5);
+    -webkit-text-stroke: 3px rgba(0, 0, 0, 0.5);
   }
 
   /* ── Message box (for reading descriptions) ── */
@@ -2078,10 +2080,11 @@ const $viewerPhoto = document.getElementById('viewer-photo');
 const $viewerArrowL = document.getElementById('viewer-arrow-left');
 const $viewerArrowR = document.getElementById('viewer-arrow-right');
 const $shiftRead = document.getElementById('shift-read-prompt');
-// The prompt sits under the photo and shouldn't compete with it. A constant rather
-// than CSS because its opacity is animated from JS — the show/hide tween writes an
-// inline value, which would win over any stylesheet rule.
-const SHIFT_PROMPT_OPACITY = '0.8';
+// The shown end of the show/hide tween, which is written inline from JS and so wins over
+// any stylesheet rule — which is why it's a constant here rather than CSS. It's the whole
+// prompt's visibility, not its weight against the photo: how much the icon and the word
+// each recede lives on them individually in CSS, so either can be dimmed without the other.
+const SHIFT_PROMPT_OPACITY = '1';
 const $msgBox = document.getElementById('message-box');
 const $msgText = document.getElementById('message-text');
 const $parallax = document.getElementById('parallax-bg');
