@@ -1175,7 +1175,7 @@
     <!-- The <br> is dropped below the breakpoint in the CSS, where the sentences no
          longer each fit a line; the space before it is what separates them once it goes
          (it is trimmed at end-of-line, so it changes nothing above the breakpoint). -->
-    <div class="select-hint">Besides clicking, you can also use Arrow keys / WASD to navigate, <br>Z / Enter / Space to confirm, and X / Esc to cancel, just like the game! <span class="nb">(・∀・)</span></div>
+    <div class="select-hint">Besides clicking, you can also use Arrow keys / WASD to navigate, <br>Z / Enter / Space to confirm, and X to cancel, just like the game! <span class="nb">(・∀・)</span></div>
     <div class="content-warning content-warning-bs">WARNING: Major spoilers ahead. TRUTH ALBUM contains graphic imagery, body horror, and explicit depictions of death — the most disturbing content in OMORI. Proceed only if you're prepared.</div>
   </div>
 </div>
@@ -2127,16 +2127,70 @@ function preloadAllThumbnails() {
   for (const src of collectAllPhotoUrls('thumb')) new Image().src = src;
 }
 
+// Bulk-prefetching every fullsize photo is a luxury, and on a slow link it is worse
+// than useless: requestIdleCallback paces when the *next* request is issued, not how
+// much bandwidth it takes, so the queue competes with the one photo the reader is
+// actually waiting for. Measure the connection first and skip the whole thing when
+// it can't afford it. Paging stays smooth either way — preloadNeighborFulls() keeps
+// two photos either side of the cursor warm, which is the case that would be felt.
+const PRELOAD_MIN_BPS = 1_000_000;   // 1 MB/s; 31MB of photos is ~30s even at that
+
+// Read the speed off the thumbnails, which every load fetches anyway, rather than
+// adding a probe request. Resource Timing carries the transferred size and the
+// timing of each one. navigator.connection would be simpler but Safari has none.
+// Read the speed off the thumbnails, which every load fetches anyway, rather than
+// adding a probe request: Resource Timing carries each one's transferred size and
+// timing. navigator.connection would be simpler but Safari has none.
+const PRELOAD_SAMPLE = 12;
+
+function thumbnailTimings() {
+  const all = performance.getEntriesByType('resource')
+    .filter(e => e.name.includes('/assets/thumbnails/'));
+  return { all, fetched: all.filter(e => e.transferSize > 0) };
+}
+
 function preloadAllFullsizeIdle() {
-  const urls = collectAllPhotoUrls('full');
-  let i = 0;
-  const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 200));
-  const step = () => {
-    if (i >= urls.length) return;
-    new Image().src = urls[i++];
+  // The thumbnails are still arriving when `load` fires — they are detached Images and
+  // don't hold it up — so wait for enough of them to have landed before judging.
+  let waited = 0;
+  const decide = () => {
+    const { all, fetched } = thumbnailTimings();
+    // Served from cache: transferSize is 0 for every one of them. Nothing to save by
+    // skipping, since the photos will come from cache too.
+    const cached = all.length >= PRELOAD_SAMPLE && fetched.length === 0;
+
+    if (!cached && fetched.length < PRELOAD_SAMPLE) {
+      if (waited < 5000) { waited += 300; setTimeout(decide, 300); return; }
+      // Still not twelve thumbnails after five seconds. On any connection fast enough
+      // to be worth pulling 31MB down, twelve land in well under one — so the silence
+      // is itself the measurement. Treating this as "unknown, go ahead" is how the
+      // slowest connections ended up being the ones that got the prefetch.
+      console.info('omori-album: thumbnails still trickling in after 5s, skipping the fullsize prefetch');
+      return;
+    }
+
+    if (!cached) {
+      const bytes = fetched.reduce((sum, e) => sum + e.transferSize, 0);
+      const span = Math.max(...fetched.map(e => e.responseEnd))
+                 - Math.min(...fetched.map(e => e.startTime));
+      const bps = span > 0 ? bytes / (span / 1000) : Infinity;
+      if (bps < PRELOAD_MIN_BPS) {
+        console.info(`omori-album: ~${Math.round(bps / 1024)} KB/s, skipping the fullsize prefetch`);
+        return;
+      }
+    }
+
+    const urls = collectAllPhotoUrls('full');
+    let i = 0;
+    const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 200));
+    const step = () => {
+      if (i >= urls.length) return;
+      new Image().src = urls[i++];
+      idle(step);
+    };
     idle(step);
   };
-  idle(step);
+  decide();
 }
 
 let arrowImgRed = null;
