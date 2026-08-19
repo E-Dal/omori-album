@@ -1,2 +1,8 @@
 .DS_Store
 push.sh
+
+# Scratch harnesses: throwaway pages that load index.html in an iframe and print a
+# measurement (_ln.html measures select-hint line wrapping). The `_` prefix is the
+# convention for them, and push.sh runs `git add -A`, so without this rule one
+# forgotten scratch page lands on the public site.
+_*.html
