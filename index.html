@@ -785,11 +785,14 @@
   /* Stage names sit on the cover art at a small size and Xiaolai reads thin there.
      .stage-roller's height is a fixed 32px, so this cannot move the covers row. */
   html[lang^="zh"] .stage-roller { font-size: 21px; }
-  /* Xiaolai at the shared size-adjust sits a shade small in this dense panel. */
-  html[lang^="zh"] .set-tab,
+  /* Xiaolai at the shared size-adjust sits a shade small in this dense panel, so
+     every string in the panel runs above its Latin size in Chinese — but not by a
+     uniform step: the tab row is short and sits alone, the help line is a full
+     sentence at the bottom edge, and each was set by eye at the size it reads best. */
   html[lang^="zh"] .set-item-header,
-  html[lang^="zh"] .set-percent { font-size: 27px; }
-  html[lang^="zh"] #set-help { font-size: 25px; }
+  html[lang^="zh"] .set-percent { font-size: 29px; }
+  html[lang^="zh"] .set-tab { font-size: 28px; }
+  html[lang^="zh"] #set-help { font-size: 29px; }
   .set-window {
     position: absolute;
     left: 10px; width: 620px;
@@ -802,7 +805,7 @@
      on the 640x480 stage. The game top-anchors it at y=10 instead. */
   #set-tabs    { top: 35px;  height: 44px; }
   #set-body    { top: 81px;  height: 318px; }
-  #set-help    { top: 401px; height: 44px; font-size: 24px; padding: 6px 10px; }
+  #set-help    { top: 401px; height: 44px; font-size: 25px; padding: 6px 10px; }
 
   /* Tabs: Window_Command with maxCols = tab count, so equal columns across the
      content width (620 - 2*10 padding). Text is centred in its column; the hand sits
@@ -839,6 +842,10 @@
     visibility: hidden;
     image-rendering: pixelated;
   }
+  /* The selected tab keeps its hand even after focus drops into the option list —
+     it just greys and stops moving, the same deactivate-don't-deselect rule the
+     option window follows. So the panel always shows exactly two hands, exactly one
+     of them live, and which one is live is what tells you where the keys will go. */
   .set-tab.active .set-hand { visibility: visible; }
 
   /* Option rows.
@@ -853,6 +860,9 @@
        hand centre (24, 19.5), sprite 29x15 */
   #set-items { position: relative; height: 100%; }
   .set-item { position: absolute; left: 0; right: 0; height: 64px; }
+  /* Audio rows are pickable with the mouse the way the language labels are, so the
+     whole row band takes a pointer — not just the bar, which already had one. */
+  .set-item-pick { cursor: pointer; }
   .set-item .set-hand {
     position: absolute;
     left: 9.5px; top: 12px;
@@ -862,12 +872,12 @@
   /* Deactivated cursor: the game keeps drawing it on index 0 with
      setColorTone([-80,-80,-80,255]) and stops its animation, which is why the first
      row alone shows a grey hand that doesn't move while the category bar has focus. */
-  .set-item .set-hand.idle { filter: grayscale(1) brightness(0.55); }
+  #settings-stage .set-hand.idle { filter: grayscale(1) brightness(0.55); }
   .set-item .set-hand.hidden { visibility: hidden; }
   .set-item-header {
     position: absolute; left: 55px; top: 6px;
     height: 24px; line-height: 24px;
-    font-size: 26px;
+    font-size: 27px;
   }
   .set-bar { cursor: pointer; }
   .set-bar {
@@ -891,7 +901,7 @@
     width: 100px; height: 40px;
     line-height: 40px;
     text-align: right;
-    font-size: 26px;
+    font-size: 27px;
   }
   /* Language: both options on one line. Each sits in a shrink-to-fit box so its hand
      can hang off the left edge with `right: 100%`, the same trick the tabs use. */
@@ -909,20 +919,24 @@
     width: 29px; height: 15px;
     image-rendering: pixelated;
   }
+  /* Xiaolai sits a touch high in the row at the size it renders here; the whole box
+     drops 1px in Chinese so the label and its hand move together. */
+  html[lang^="zh"] .set-opt-box { top: 6px; }
   .set-opt-box .set-hand[hidden] { display: none; }
   /* Both options stay white. Dimming the inactive one doubled up with the hand as a
      "which is selected" signal and read as if the option were disabled; the hand
      alone carries it. */
   .set-opt {
-    /* 27px in both languages, not 26 + a zh bump like its neighbours. These two labels
-       are the only strings that stay on screen *through* a language change, so a 1px
-       step here is a visible twitch rather than a difference you'd have to A/B. The
-       rest of the panel re-renders into different words anyway. */
-    font-size: 27px; line-height: 24px;
+    /* 28px is the Latin size. These two labels are the only strings that stay on
+       screen *through* a language change, so the zh bump below is a visible twitch on
+       switch rather than a difference you'd have to A/B — kept anyway, since every
+       other string in the panel also sits a step above its Latin size in Chinese. */
+    font-size: 28px; line-height: 24px;
     color: #fff;
     cursor: pointer;
     white-space: nowrap;
   }
+  html[lang^="zh"] .set-opt { font-size: 29px; }
 
   /* ── Page flip overlay ── */
   #page-flip {
@@ -2131,12 +2145,22 @@ window.addEventListener('DOMContentLoaded', () => {
   // Capture phase, and that is load-bearing. In the bubble phase this ran *after* the
   // volume bar's own pointerdown, which moves the cursor to that row and re-renders
   // the list — detaching the very node the event targeted. closest() then walks a
-  // subtree that is no longer in the document, never reaches #settings-stage, and the
-  // panel closed itself the instant you pressed on a slider. Capturing runs first,
+  // subtree that is no longer in the document, never reaches the window it came from,
+  // and the panel closed itself the instant you pressed on a slider. Capturing runs first,
   // while the target is still attached.
+  //
+  // The exclusion is the three `.set-window` boxes, NOT #settings-stage. The stage is
+  // a 640x480 box scaled up to cover most of the window, and it is transparent — the
+  // only thing anyone can see of it is the three windows sitting inside it. Excluding
+  // the stage therefore made a large invisible region that looks exactly like the
+  // backdrop, and reads as one, swallow the click instead of closing: at 1280x820 it
+  // was ~1093x820 of "dead" backdrop against ~747 live points. Excluding the windows
+  // themselves means everything you can actually see of the panel keeps its click and
+  // everything that looks like backdrop behaves like backdrop, including the strips
+  // beside the windows and the 2px seams between them.
   document.addEventListener('pointerdown', (e) => {
     if (!settingsOpen()) return;
-    if (e.target.closest('#settings-stage, #settings-toggle')) return;
+    if (e.target.closest('.set-window, #settings-toggle')) return;
     closeSettings();
   }, true);
   // Restores the stored language. Held until the overlay is in hand so the captions
@@ -2734,12 +2758,12 @@ for (const k of Object.keys(VOL_DEFAULTS)) {
   volumePct[k] = Number.isFinite(v) && v >= 0 && v <= 100 ? v : VOL_DEFAULTS[k];
 }
 
-const SET_BOB_SPEED = 1.5; // multiplier on the game's 0.5/frame cursor sine
+const SET_BOB_SPEED = 2; // multiplier on the game's 0.5/frame cursor sine
 const SET_ROW_TOP = 2;     // breathing room above the first row
 // The game's itemHeight is 75, which leaves a wide channel between one bar and the
 // next label because our rows carry a label and a bar and nothing else. 64 closes it
 // up; it is the one number that sets how tight the four rows sit.
-const SET_ROW_PITCH = 70;
+const SET_ROW_PITCH = 76;
 const SET_LANGS = ['en', 'zh'];
 let setTab = 'audio';      // which category is selected
 let setFocus = 'tabs';     // 'tabs' | 'items' — which window has the cursor
@@ -2780,7 +2804,15 @@ function renderSettings() {
   const t = I18N[lang];
   document.querySelectorAll('.set-tab').forEach(el => {
     el.querySelector('.set-tab-label').textContent = t.tabs[el.dataset.tab];
-    el.classList.toggle('active', el.dataset.tab === setTab && setFocus === 'tabs');
+    const on = el.dataset.tab === setTab;
+    el.classList.toggle('active', on);          // which tab owns the hand
+    const hand = el.querySelector('.set-hand');
+    const idle = !on || setFocus !== 'tabs';    // ...and whether that hand is the live one
+    hand.classList.toggle('idle', idle);
+    // The bob loop skips idle hands, so an unparked one would freeze wherever the sine
+    // happened to be. The row hands are rebuilt by innerHTML on every render and so
+    // always start at rest; this node persists, so it has to be put back by hand.
+    if (idle) hand.style.transform = '';
   });
 
   const $items = document.getElementById('set-items');
@@ -2795,13 +2827,14 @@ function renderSettings() {
     // the window's inner edge. The hand lives inside .set-item, so it follows without
     // a second offset to keep in sync.
     $items.innerHTML = t.audio.map((row, i) => `
-      <div class="set-item" style="top:${SET_ROW_TOP + i * SET_ROW_PITCH}px">
+      <div class="set-item set-item-pick" data-idx="${i}" style="top:${SET_ROW_TOP + i * SET_ROW_PITCH}px">
         ${i === setItemIdx ? handFor(true) : ''}
         <div class="set-item-header">${row.text}:</div>
         <div class="set-bar"><div class="set-bar-fill" style="width:${volumePct[row.key] * 4}px"></div></div>
         <div class="set-percent">${volumePct[row.key]}%</div>
       </div>`).join('');
     wireVolumeDrag($items);
+    wireRowPick($items);
   } else {
     // Both languages on one line. The greyed hand marks which language is *active*,
     // the live one marks where the cursor is — with only one hand it was impossible
@@ -2889,6 +2922,29 @@ function setVolumeTo(i, pct) {
   updateVolumeBar(i);
   const now = performance.now();
   if (now - lastVolSfxAt >= VOL_SFX_MIN_GAP_MS) { lastVolSfxAt = now; playCursorSfx(); }
+}
+
+// Click an audio row to move the cursor onto it — the mouse equivalent of arrowing
+// down the list, and the counterpart of the language labels' own click handler.
+// Sound follows the keyboard: entering the list from the category bar is a confirm,
+// moving between rows once inside it is a cursor blip, and clicking the row you are
+// already on is neither, so it stays silent and doesn't re-render.
+//
+// Clicks that start on the bar are skipped. That path is a drag, it already takes
+// focus itself, and its pointerdown re-renders the list — which detaches the row this
+// listener is on, so the click would be swallowed anyway; better to say so than to
+// rely on it.
+function wireRowPick($items) {
+  $items.querySelectorAll('.set-item-pick').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.set-bar')) return;
+      const i = Number(row.dataset.idx);
+      if (setFocus === 'items' && setItemIdx === i) return;
+      setFocus === 'items' ? playCursorSfx() : playSelectSfx();
+      setFocus = 'items'; setItemIdx = i;
+      renderSettings();
+    });
+  });
 }
 
 function wireVolumeDrag($items) {
