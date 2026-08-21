@@ -2006,7 +2006,13 @@ function loadSfx(name, base) {
     .then(r => r.arrayBuffer())
     .then(buf => audioCtx.decodeAudioData(buf))
     .then(decoded => { sfxBuffers[name] = decoded; })
-    .catch(e => console.warn('audio: could not load sfx', base, e));
+    .catch(e => {
+      // Drop the request marker so a later ensureSfx() can try again. Otherwise one
+      // failed fetch mutes that cue for the rest of the session, which matters most for
+      // the once-per-session scare: it is warmed twice precisely so a miss can recover.
+      sfxRequested.delete(name);
+      console.warn('audio: could not load sfx', base, e);
+    });
 }
 // The game splits one-shots into SE (sound effects) and ME (musical effects) with
 // separate volume sliders. The only ME-shaped cue here is the BLACKSPACE sting, so it
@@ -3357,6 +3363,12 @@ function applyStage(albumObj, stageNum) {
 
 function openAlbum(key) {
   album = ALBUMS[key];
+  // Warm the scare's sting here, minutes before photo #24. playSfxBuffer() only *starts*
+  // the fetch when it finds no buffer and plays nothing that call, and the scare fires
+  // exactly once per session — so a cue that isn't already decoded is a cue nobody hears.
+  // Every other one-shot survives that because it repeats; this one went silent the day
+  // the SFX loads went lazy.
+  if (album === ALBUMS.blackspace) ensureSfx('jumpscare');
   applyStage(album, stageIdx[key] || 0);
   page = 0;
   cursorIdx = 0;
@@ -4643,6 +4655,9 @@ function bsDwellArmed() {
 function updateBsDwellTimer() {
   if (bsDwellTimer) { clearTimeout(bsDwellTimer); bsDwellTimer = null; }
   if (!bsDwellArmed()) return;
+  // Second warm, in case openAlbum's fetch failed: this path calls startBsJumpscare(0),
+  // so the dwell is all the head start the sting gets.
+  ensureSfx('jumpscare');
   bsDwellTimer = setTimeout(() => {
     bsDwellTimer = null;
     // Re-check on the way out rather than trying to disarm from every exit path there
