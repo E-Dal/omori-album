@@ -2099,18 +2099,35 @@ const $viewer = document.getElementById('viewer');
 const $viewerPhoto = document.getElementById('viewer-photo');
 const $viewerArrowL = document.getElementById('viewer-arrow-left');
 const $viewerArrowR = document.getElementById('viewer-arrow-right');
-// Album page flip, in frames at 60fps: the page collapses to nothing, swaps, and grows
-// back. The game uses 20 and 15 (photo_album_plugin.js turnPageRight :2308 and :2318,
-// stepped once per frame with input locked throughout — 617ms end to end), and these were
-// briefly set to match. They are deliberately shorter.
+// Album page flip, written in frames at the game's 60fps: the page collapses to nothing,
+// swaps, and grows back. These are the game's own numbers (photo_album_plugin.js
+// turnPageRight :2308 and :2318, stepped once per frame with input locked throughout).
 //
-// The two numbers measure different things. easeOutCirc is front-loaded: the first frame
-// alone collapses the page to 68.8%, and by frame 15 of 20 it is at 3.2% — the remaining
-// five frames crawl from 3% to 0 and cannot be seen. Of the game's 617ms, about 150ms is
-// that invisible tail, so what a player actually perceives is nearer 467ms. 12+8 gives a
-// perceived 283ms, which is what matching the real game by eye landed on.
-const PAGE_FLIP_F1 = 12;
-const PAGE_FLIP_F2 = 8;
+// The album shipped with 12+10; 12+8 replaced it on 2026-04-24 for a "crisper turn feel"
+// and stood for four months. Both read as far quicker than the game, and the gap between
+// them is not where that lives — 350ms against 383ms is a 9% step nobody can feel. The
+// number that shows is phase 1, the collapse the eye actually tracks, and it sat at 12
+// through all of it.
+//
+// Neither phase is on screen for its whole length, because easeOutCirc is front-loaded and
+// both use it: scale crosses 3.2% at t=0.749, so phase 1's last quarter crawls from 3%
+// width to 0 and phase 2's last quarter crawls from 97% back to full. About 145ms of the
+// 600ms below is those two tails, leaving ~455ms of visible turn — against ~265ms at 12+8.
+// One frame sits between the phases for the snapshot swap.
+const PAGE_FLIP_F1 = 24;
+const PAGE_FLIP_F2 = 18;
+// One frame of the fixed 60fps step the game runs on, and so of every frame count in this
+// file. requestAnimationFrame fires once per display refresh instead, which is the same
+// thing only on a 60Hz panel — so anything advancing "per frame" scales by the real time
+// that passed rather than counting callbacks.
+const GAME_FRAME_MS = 1000 / 60;
+// Clamped so a backgrounded tab resumes where it left off instead of teleporting: rAF
+// stops firing while the tab is hidden, and the first callback back would otherwise carry
+// seconds of catch-up in a single step.
+const MAX_CATCHUP_FRAMES = 4;
+function framesSince(prevMs, nowMs) {
+  return Math.min((nowMs - prevMs) / GAME_FRAME_MS, MAX_CATCHUP_FRAMES);
+}
 
 const $shiftRead = document.getElementById('shift-read-prompt');
 // The shown end of the show/hide tween, which is written inline from JS and so wins over
@@ -2402,12 +2419,20 @@ function startLoop() {
   resetParallax = () => { parallaxX = 0; lastParallaxSnap = 0; };
   resetBsScroll = () => { bsScrollX = 0; bsScrollY = 0; $selectBg.style.backgroundPosition = ''; };
 
-  function tick() {
+  // Every accumulator in here is written as an amount per 60fps game frame, so each one
+  // scales by how many of those frames the elapsed time is worth.
+  let lastTickTime = null;
+  function tick(now) {
+    // The bootstrap call below invokes tick() directly rather than through rAF, so the
+    // first pass has no timestamp and no previous one to measure against either way.
+    const t = (now === undefined) ? performance.now() : now;
+    const frames = lastTickTime === null ? 1 : framesSince(lastTickTime, t);
+    lastTickTime = t;
 
     // Parallax scroll inside an album. Game-accurate: all three albums use
     // ParallaxSpeedX: 0.1, ParallaxSpeedY: 0 (per Items.json AlbumParallax meta).
     if (state !== 'select') {
-      parallaxX -= 0.1;
+      parallaxX -= 0.1 * frames;
       const snapped = Math.round(parallaxX);
       if (snapped !== lastParallaxSnap) {
         lastParallaxSnap = snapped;
@@ -2419,15 +2444,15 @@ function startLoop() {
     // scrolling keeps going during the fade-to-black, only stopping the moment
     // updateSelectCursor swaps to the new bg behind the fully-black overlay.
     if (state === 'select' && currentSelectBg === ALBUMS.blackspace.selectBg) {
-      bsScrollX -= 0.5;
-      bsScrollY += 0.5;
+      bsScrollX -= 0.5 * frames;
+      bsScrollY += 0.5 * frames;
       $selectBg.style.backgroundPosition = `${Math.round(bsScrollX)}px ${Math.round(bsScrollY)}px`;
     }
 
     // Cursor bob — game-accurate (Sprite_WindowCustomCursor, Omori BASE.js L4171):
     // duration 20, speed 0.5, amplitude 0.1 × cursor_width (29px) ≈ 2.9px;
     // full sine cycle = 40 frames (~0.67s).
-    cursorBobAngle = (cursorBobAngle + 0.5) % 20;
+    cursorBobAngle = (cursorBobAngle + 0.5 * frames) % 20;
     if (state === 'browsing' && !cursorBobPaused) {
       const bobX = Math.sin(cursorBobAngle * (Math.PI / 10)) * 2.9;
       $cursor.style.marginLeft = (bobX + 8) + 'px';
@@ -3747,36 +3772,54 @@ function turnPage(dir) {
 
   // Wait for new images to load, then capture new page for phase 2
   waitForPageImages().then(() => {
-    requestAnimationFrame(() => {
+    requestAnimationFrame((startTime) => {
     const newSide = dir > 0 ? 0 : 1;
 
-    let frame = 0;
-    const phase1Frames = PAGE_FLIP_F1;
-    const phase2Frames = PAGE_FLIP_F2;
+    // Driven by elapsed time, not by counting rAF callbacks. PAGE_FLIP_F1/F2 are authored
+    // against the game's fixed 60fps step, so advancing one step per callback ran the flip
+    // at whatever rate the display refreshes at — twice as fast on a 120Hz panel, which is
+    // the same artwork moving through the same easing in half the time. Converting to
+    // milliseconds up front keeps the timing the frame counts describe on any display.
+    const phase1Ms = PAGE_FLIP_F1 * GAME_FRAME_MS;
+    const phase2Ms = PAGE_FLIP_F2 * GAME_FRAME_MS;
+    // The game holds the page collapsed for one whole frame while it swaps the snapshot,
+    // so the swap gets a slice of its own rather than riding the phase boundary.
+    const swapMs = GAME_FRAME_MS;
+    // startTime is this callback's own frame timestamp, so the first animateFlip lands one
+    // frame in — where the old counter started, at frame 1 rather than 0.
     // easeOutCirc formula from Omori BASE.js L5475
     const easeOutCirc = t => Math.sqrt(1 - (t - 1) * (t - 1));
 
-    function animateFlip() {
-      frame++;
-      if (frame <= phase1Frames) {
-        const t = frame / phase1Frames;
-        $flip.style.transform = `scaleX(${1 - easeOutCirc(t)})`;
-      } else if (frame === phase1Frames + 1) {
-        // Switch to new page snapshot
-        $flip.innerHTML = '';
-        if (dir > 0) {
-          $flip.style.left = '0px';
-          $flip.style.transformOrigin = 'right center';
-        } else {
-          $flip.style.left = halfW + 'px';
-          $flip.style.transformOrigin = 'left center';
-        }
-        $flip.style.transform = 'scaleX(0)';
-        captureHalfPageInto($flip, newSide);
-      } else if (frame <= phase1Frames + phase2Frames + 1) {
-        const t = (frame - phase1Frames - 1) / phase2Frames;
+    let swapped = false;
+    function swapToNewPage() {
+      swapped = true;
+      $flip.innerHTML = '';
+      if (dir > 0) {
+        $flip.style.left = '0px';
+        $flip.style.transformOrigin = 'right center';
+      } else {
+        $flip.style.left = halfW + 'px';
+        $flip.style.transformOrigin = 'left center';
+      }
+      $flip.style.transform = 'scaleX(0)';
+      captureHalfPageInto($flip, newSide);
+    }
+
+    function animateFlip(now) {
+      const elapsed = now - startTime;
+      // Every branch past phase 1 asks for the swap rather than assuming an earlier frame
+      // did it, so a dropped frame or a hitch long enough to skip a whole phase still ends
+      // up showing the new page instead of growing the old one back.
+      if (elapsed < phase1Ms) {
+        $flip.style.transform = `scaleX(${1 - easeOutCirc(elapsed / phase1Ms)})`;
+      } else if (elapsed < phase1Ms + swapMs) {
+        if (!swapped) swapToNewPage();
+      } else if (elapsed < phase1Ms + swapMs + phase2Ms) {
+        if (!swapped) swapToNewPage();
+        const t = (elapsed - phase1Ms - swapMs) / phase2Ms;
         $flip.style.transform = `scaleX(${easeOutCirc(t)})`;
       } else {
+        if (!swapped) swapToNewPage();
         $flip.style.display = 'none';
         $flip.innerHTML = '';
         $cover.style.display = 'none';
@@ -4411,16 +4454,19 @@ function typewriteLine() {
 
   let chunkIdx = 0;
   let blipCounter = 0;
-  const charsPerFrame = 1.8; // 1.8× MV default (~108 chars/sec)
+  let lastTypeTime = null;
+  const charsPerFrame = 1.8; // 1.8× MV default (~108 chars/sec at the game's 60fps)
   const prefix = msgPrevLines;
   const fullHtml = chunks.join('');
 
   cancelAnimationFrame(msgTypingTimer);
-  function typeFrame() {
+  function typeFrame(now) {
+    const frames = lastTypeTime === null ? 1 : framesSince(lastTypeTime, now);
+    lastTypeTime = now;
     // Game-accurate fast-forward: while user holds confirm/cancel/shift/click,
     // _showFast triggers and the rest of the line types instantly that frame.
     if (msgHoldFast) chunkIdx = chunks.length;
-    else chunkIdx += charsPerFrame;
+    else chunkIdx += charsPerFrame * frames;
     if (chunkIdx > chunks.length) chunkIdx = chunks.length;
     // Show visible part + invisible remainder (preserves word-wrap positions).
     // Both halves get the same effect wrap so the styled font's metrics drive
@@ -4430,10 +4476,16 @@ function typewriteLine() {
     const hidden = chunks.slice(chunkIdx).join('');
     $msgText.innerHTML = prefix + wrap(visible) + '<span style="visibility:hidden">' + wrap(hidden) + '</span>';
 
-    // Play text blip
-    blipCounter += charsPerFrame;
+    // Play text blip. The counter is fed frames rather than characters because that is
+    // what the old line already amounted to: it reset to 0 on crossing 2, so at any
+    // charsPerFrame above 1 it fired every second frame — 30/sec — and the character rate
+    // never actually divided into it. Counting the frames directly says that outright and
+    // holds 30/sec on any display, where scaling the character count still drifted (40/sec
+    // at 120Hz, 48 at 144) because the truncation swallowed a different remainder each time.
+    // Subtracting the threshold rather than zeroing keeps the remainder across jitter.
+    blipCounter += frames;
     if (blipCounter >= 2) {
-      blipCounter = 0;
+      blipCounter -= 2;
       playTextBlip();
     }
 
